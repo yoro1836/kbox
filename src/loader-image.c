@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -31,6 +32,19 @@ static int map_region_exact(uint64_t addr, uint64_t size, int flags, void **out)
 
     mapped = mmap((void *) (uintptr_t) addr, (size_t) size,
                   PROT_READ | PROT_WRITE, mmap_flags, -1, 0);
+
+#ifdef MAP_FIXED_NOREPLACE
+    /* TOCTOU race: address may have been taken between probe and use.
+     * Fall back to MAP_FIXED which replaces the existing mapping.
+     */
+    if (mapped == MAP_FAILED && errno == EEXIST) {
+        mmap_flags &= ~MAP_FIXED_NOREPLACE;
+        mmap_flags |= MAP_FIXED;
+        mapped = mmap((void *) (uintptr_t) addr, (size_t) size,
+                      PROT_READ | PROT_WRITE, mmap_flags, -1, 0);
+    }
+#endif
+
     if (mapped == MAP_FAILED)
         return -errno;
     if ((uintptr_t) mapped != (uintptr_t) addr) {

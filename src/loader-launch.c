@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -79,12 +80,18 @@ int kbox_loader_prepare_launch(const struct kbox_loader_launch_spec *spec,
     kbox_loader_launch_reset(launch);
 
     if (read_fd_all(spec->exec_fd, &launch->main_elf, &launch->main_elf_len) <
-        0)
+        0) {
+        fprintf(stderr, "kbox: loader: read_fd_all(exec_fd=%d) failed\n",
+                spec->exec_fd);
         goto fail;
+    }
     if (spec->interp_fd >= 0 &&
         read_fd_all(spec->interp_fd, &launch->interp_elf,
-                    &launch->interp_elf_len) < 0)
+                    &launch->interp_elf_len) < 0) {
+        fprintf(stderr, "kbox: loader: read_fd_all(interp_fd=%d) failed\n",
+                spec->interp_fd);
         goto fail;
+    }
 
     memset(&layout_spec, 0, sizeof(layout_spec));
     layout_spec.main_elf = launch->main_elf;
@@ -110,8 +117,10 @@ int kbox_loader_prepare_launch(const struct kbox_loader_launch_spec *spec,
     layout_spec.egid = spec->egid;
     layout_spec.secure = spec->secure;
 
-    if (kbox_loader_build_layout(&layout_spec, &launch->layout) < 0)
+    if (kbox_loader_build_layout(&layout_spec, &launch->layout) < 0) {
+        fprintf(stderr, "kbox: loader: build_layout failed\n");
         goto fail;
+    }
 
     memset(&image_spec, 0, sizeof(image_spec));
     image_spec.layout = &launch->layout;
@@ -120,14 +129,19 @@ int kbox_loader_prepare_launch(const struct kbox_loader_launch_spec *spec,
     image_spec.interp_elf = launch->interp_elf;
     image_spec.interp_elf_len = launch->interp_elf_len;
 
-    if (kbox_loader_materialize_image(&image_spec, &launch->image) < 0)
-        goto fail;
-    if (kbox_loader_build_handoff(&launch->layout, &launch->image,
-                                  &launch->handoff) < 0) {
+    if (kbox_loader_materialize_image(&image_spec, &launch->image) < 0) {
+        fprintf(stderr, "kbox: loader: materialize_image failed\n");
         goto fail;
     }
-    if (kbox_loader_prepare_transfer(&launch->handoff, &launch->transfer) < 0)
+    if (kbox_loader_build_handoff(&launch->layout, &launch->image,
+                                  &launch->handoff) < 0) {
+        fprintf(stderr, "kbox: loader: build_handoff failed\n");
         goto fail;
+    }
+    if (kbox_loader_prepare_transfer(&launch->handoff, &launch->transfer) < 0) {
+        fprintf(stderr, "kbox: loader: prepare_transfer failed\n");
+        goto fail;
+    }
     return 0;
 
 fail:

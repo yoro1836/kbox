@@ -68,6 +68,11 @@ ifeq ($(CONFIG_HAS_WEB),y)
   SRCS         += $(WEB_ASSET_SRC)
 endif
 
+# Android: glibc symbol shims for Bionic compatibility
+ifdef IS_ANDROID
+  SRCS += $(SRC_DIR)/glibc-compat.c
+endif
+
 # Syscall fast-path (from Kconfig SYSCALL_FAST_PATH)
 ifeq ($(CONFIG_SYSCALL_FAST_PATH),y)
   CFLAGS += -DKBOX_AUTO_FAST_PATH=1

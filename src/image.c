@@ -424,6 +424,41 @@ static const char **build_loader_argv(const char *command,
     return argv;
 }
 
+static uint64_t probe_map_addr(uint64_t preferred, size_t size)
+{
+    void *p = mmap((void *) (uintptr_t) preferred, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0, 0);
+    if (p != MAP_FAILED && (uintptr_t) p == preferred) {
+        munmap(p, size);
+        return preferred;
+    }
+
+    /* Try progressively lower addresses */
+    static const uint64_t candidates[] = {
+        0x400000000000ULL, 0x300000000000ULL, 0x200000000000ULL,
+        0x100000000000ULL, 0x80000000000ULL,  0x40000000000ULL,
+    };
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+        p = mmap((void *) (uintptr_t) candidates[i], size,
+                 PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0, 0);
+        if (p != MAP_FAILED && (uintptr_t) p == candidates[i]) {
+            munmap(p, size);
+            return candidates[i];
+        }
+    }
+
+    /* Last resort: let kernel choose */
+    p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0,
+             0);
+    if (p != MAP_FAILED && p != NULL) {
+        uint64_t addr = (uint64_t) (uintptr_t) p;
+        munmap(p, size);
+        return addr;
+    }
+    return 0;
+}
+
 static int prepare_userspace_launch(const struct kbox_image_args *args,
                                     const char *command,
                                     int exec_memfd,
@@ -472,9 +507,24 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     spec.execfn = command;
     spec.random_bytes = launch_random;
     spec.page_size = (uint64_t) sysconf(_SC_PAGESIZE);
-    spec.stack_top = 0x700000010000ULL;
-    spec.main_load_bias = 0x600000000000ULL;
-    spec.interp_load_bias = 0x610000000000ULL;
+
+    /* Probe for available addresses instead of hardcoding.
+     * Android's address space is more restricted than desktop Linux.
+     */
+    uint64_t stack_addr = probe_map_addr(0x700000010000ULL, 4 * 1024 * 1024);
+    uint64_t main_addr = probe_map_addr(0x600000000000ULL, 4 * 1024 * 1024);
+    uint64_t interp_addr = probe_map_addr(0x610000000000ULL, 4 * 1024 * 1024);
+
+    if (!stack_addr || !main_addr || !interp_addr) {
+        fprintf(stderr,
+                "kbox: cannot find available address space for loader\n");
+        free(argv);
+        return -1;
+    }
+
+    spec.stack_top = stack_addr + 0x10000;
+    spec.main_load_bias = main_addr;
+    spec.interp_load_bias = interp_addr;
     spec.uid = uid;
     spec.euid = uid;
     spec.gid = gid;
@@ -482,6 +532,11 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     spec.secure = 0;
 
     rc = kbox_loader_prepare_launch(&spec, launch);
+    if (rc < 0 && args->verbose)
+        fprintf(stderr,
+                "kbox: prepare_launch failed (exec_fd=%d, interp_fd=%d, "
+                "page_size=%lu)\n",
+                exec_memfd, interp_memfd, (unsigned long) spec.page_size);
     free(argv);
     return rc;
 }
@@ -531,16 +586,34 @@ static void drop_launch_caps(void)
 
 static int set_launch_rlimits(void)
 {
-    struct rlimit nofile = {65536, 65536};
     struct rlimit rtprio = {0, 0};
     struct rlimit current;
     rlim_t required_nofile = (rlim_t) (KBOX_FD_BASE + KBOX_FD_TABLE_MAX);
 
-    if (setrlimit(RLIMIT_NOFILE, &nofile) != 0)
+    if (getrlimit(RLIMIT_NOFILE, &current) != 0)
         return -1;
+
+    fprintf(stderr, "kbox: RLIMIT_NOFILE: cur=%lu hard=%lu required=%lu\n",
+            (unsigned long) current.rlim_cur, (unsigned long) current.rlim_max,
+            (unsigned long) required_nofile);
+
+    /* Try to raise to required_nofile, but accept whatever the hard limit
+     * allows. Android may have a lower hard limit than desktop Linux.
+     */
+    if (current.rlim_cur < required_nofile) {
+        struct rlimit nofile;
+        nofile.rlim_cur = current.rlim_max;
+        nofile.rlim_max = current.rlim_max;
+        setrlimit(RLIMIT_NOFILE, &nofile);
+    }
+
     if (getrlimit(RLIMIT_NOFILE, &current) != 0)
         return -1;
     if (current.rlim_cur < required_nofile) {
+        fprintf(stderr,
+                "kbox: RLIMIT_NOFILE still too low: cur=%lu < required=%lu\n",
+                (unsigned long) current.rlim_cur,
+                (unsigned long) required_nofile);
         errno = EMFILE;
         return -1;
     }

@@ -141,52 +141,9 @@ jobs:
           path: liblkl-${{ matrix.arch }}.tar.gz
           retention-days: 3
 
-  # ---- Build aarch64-android LKL via termux-docker (Bionic) ----
-  build-android-lkl:
-    needs: check-upstream
-    if: needs.check-upstream.outputs.needs_build == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Build LKL in termux-docker
-        run: |
-          LKL_COMMIT="${{ needs.check-upstream.outputs.lkl_commit }}"
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            termux/termux-docker:aarch64 \
-            sh -c "
-              apt update -y &&
-              apt install -y git make clang &&
-              git clone --depth=1 https://github.com/lkl/linux.git /tmp/lkl-src &&
-              if [ -n '${LKL_COMMIT}' ]; then
-                cd /tmp/lkl-src && git fetch --depth=1 origin '${LKL_COMMIT}' && git checkout FETCH_HEAD;
-              fi &&
-              make -C /tmp/lkl-src ARCH=lkl defconfig &&
-              make -C /tmp/lkl-src ARCH=lkl -j\$(nproc) &&
-              make -C /tmp/lkl-src/tools/lkl -j\$(nproc) &&
-              mkdir -p /workspace/lkl-aarch64-android &&
-              cp /tmp/lkl-src/tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
-              cp /tmp/lkl-src/tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true &&
-              cp /tmp/lkl-src/tools/lkl/include/lkl/autoconf.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
-            "
-
-      - name: Package
-        run: |
-          tar czf liblkl-aarch64-android.tar.gz -C lkl-aarch64-android/ .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: lkl-aarch64-android
-          path: liblkl-aarch64-android.tar.gz
-          retention-days: 3
-
   # ---- Publish: replace lkl-nightly release with latest artifacts ----
   publish-nightly:
-    needs: [check-upstream, build, build-android-lkl]
+    needs: [check-upstream, build]
     if: needs.check-upstream.outputs.needs_build == 'true'
     runs-on: ubuntu-24.04
     permissions:
@@ -214,7 +171,7 @@ jobs:
           date=${BUILD_DATE}
           upstream=https://github.com/${{ env.LKL_UPSTREAM }}/commit/${LKL_COMMIT}
 
-          Contains: liblkl-x86_64.tar.gz, liblkl-aarch64.tar.gz, liblkl-riscv64.tar.gz, liblkl-aarch64-android.tar.gz
+          Contains: liblkl-x86_64.tar.gz, liblkl-aarch64.tar.gz, liblkl-riscv64.tar.gz
           Each tarball includes: liblkl.a, lkl.h, autoconf.h, vmlinux-gdb.py,
           BUILD_INFO, sha256sums.txt
           EOF
@@ -232,5 +189,4 @@ jobs:
             --prerelease \
             dist/liblkl-x86_64.tar.gz \
             dist/liblkl-aarch64.tar.gz \
-            dist/liblkl-riscv64.tar.gz \
-            dist/liblkl-aarch64-android.tar.gz
+            dist/liblkl-riscv64.tar.gz
