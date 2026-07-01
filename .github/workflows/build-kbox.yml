@@ -147,6 +147,73 @@ jobs:
             tests/stress/*
             !tests/stress/*.c
 
+  # ---- Build LKL for Android in termux-docker (Bionic, aarch64) ----
+  build-android-lkl:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    steps:
+      - name: Build LKL in termux-docker
+        run: |
+          mkdir -p /tmp/termux-bin
+          ln -sf /data/data/com.termux/files/usr/bin/sh /tmp/termux-bin/sh
+          docker run --name lkl-build \
+            -v /tmp/termux-bin:/bin \
+            termux/termux-docker:aarch64 \
+            sh -c "
+              apt update -y &&
+              apt install -y git make clang flex bison bc &&
+              cd \$HOME &&
+              git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
+              sed -i '/^CLANG_TARGET_FLAGS\t\t:= \$(CLANG_TARGET_FLAGS_\$(SRCARCH))/i CLANG_TARGET_FLAGS_lkl := aarch64-unknown-linux-android24' lkl-src/scripts/Makefile.clang &&
+              make -C lkl-src ARCH=lkl CC=clang HOSTCC=clang HOSTCFLAGS='-Wno-implicit-function-declaration -Dbcmp=memcmp' SHELL=/data/data/com.termux/files/usr/bin/sh defconfig &&
+              make -C lkl-src ARCH=lkl CC=clang HOSTCC=clang SHELL=/data/data/com.termux/files/usr/bin/sh -j\$(nproc) &&
+              make -C lkl-src/tools/lkl CC=clang SHELL=/data/data/com.termux/files/usr/bin/sh -j\$(nproc) &&
+              mkdir -p lkl-out &&
+              cp lkl-src/tools/lkl/liblkl.a lkl-out/ &&
+              cp lkl-src/tools/lkl/include/lkl.h lkl-out/ 2>/dev/null || true &&
+              cp lkl-src/tools/lkl/include/lkl/autoconf.h lkl-out/ 2>/dev/null || true
+            "
+          mkdir -p lkl-aarch64-android
+          docker cp lkl-build:/data/data/com.termux/files/home/lkl-out/. lkl-aarch64-android/
+          docker rm lkl-build
+
+      - name: Upload LKL artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lkl-aarch64-android
+          path: lkl-aarch64-android/
+          retention-days: 1
+
+  # ---- Android cross-compilation (NDK on x86_64) ----
+  build-android:
+    needs: build-android-lkl
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Android LKL artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: lkl-aarch64-android
+          path: lkl-aarch64-android/
+
+      - name: Install Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q android-ndk-r27-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: make defconfig
+
+      - name: Build kbox for Android
+        run: make ANDROID=1 ANDROID_API=30 LKL_DIR=lkl-aarch64-android BUILD=release -j$(nproc)
+
+      - name: Verify binary
+        run: |
+          file kbox | grep -q "aarch64" || { echo "Not an aarch64 binary"; exit 1; }
+
   # ---- OCI image import: pull nginx:alpine, validate ownership rewrite ----
   # Exercises scripts/oci-pull.py + tools/oci-chown end-to-end. nginx:alpine
   # has multi-layer pulls and a /etc/passwd entry for "nginx" (uid=101) even

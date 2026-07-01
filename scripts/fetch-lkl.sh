@@ -20,7 +20,7 @@ detect_arch "${1:-}"
 LKL_DIR="${LKL_DIR:-lkl-${ARCH}}"
 REPO="${KBOX_REPO:-sysprog21/kbox}"
 NIGHTLY_TAG="${KBOX_LKL_TAG:-lkl-nightly}"
-ASSET="liblkl-${ARCH}.tar.gz"
+ASSET="${ASSET:-liblkl-${ARCH}.tar.gz}"
 SHA256_FILE="scripts/lkl-sha256.txt"
 
 mkdir -p "$LKL_DIR"

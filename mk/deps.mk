@@ -37,6 +37,11 @@ build-lkl:
 	@echo "  BUILD   lkl (from source)"
 	$(Q)./scripts/build-lkl.sh $(ARCH)
 
+.PHONY: build-lkl-android
+build-lkl-android:
+	@echo "  BUILD   lkl (Android)"
+	$(Q)./scripts/build-lkl-android.sh
+
 # Auto-fetch minislirp if missing (shallow clone, no submodule).
 # $(wildcard) evaluates at parse time, so if minislirp has not been fetched yet
 # SLIRP_SRCS is empty. Guard: fetch and re-eval so the wildcard picks up

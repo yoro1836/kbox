@@ -21,6 +21,7 @@
 #include <sys/resource.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -601,9 +602,18 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
                 argv[i + 1] = args[i];
             argv[nargs + 1] = NULL;
 
-            if (exec_memfd >= 0)
+            if (exec_memfd >= 0) {
+#ifdef __ANDROID__
+                /* Bionic lacks fexecve(); use execveat via /proc/self/fd/N */
+                char fdpath[64];
+                snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d",
+                         exec_memfd);
+                (void) syscall(__NR_execveat, AT_FDCWD, fdpath,
+                               (char *const *) argv, environ, 0);
+#else
                 fexecve(exec_memfd, (char *const *) argv, environ);
-            else
+#endif
+            } else
                 execv(command, (char *const *) argv);
 
             /* exec only returns on failure. */

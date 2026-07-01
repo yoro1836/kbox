@@ -1,5 +1,8 @@
 # mk/toolchain.mk - Compiler detection and Kconfig-derived flags
 
+# Android NDK cross-compilation (must be included before other flags)
+-include mk/android.mk
+
 CC       ?= gcc
 CFLAGS   ?=
 LDFLAGS  ?=
@@ -16,10 +19,13 @@ endif
 
 # kbox is Linux-only. Bail if the compiler does not target Linux.
 # Skip the check for targets that don't compile (config, clean, indent, etc.).
+# Skip for Android NDK builds (NDK clang's -dumpmachine may be empty).
 ifneq ($(BUILD_GOALS),)
+ifndef IS_ANDROID
 CC_TARGET := $(shell $(CC) -dumpmachine 2>/dev/null)
 ifeq ($(findstring linux,$(CC_TARGET)),)
   $(error $(CC) targets '$(CC_TARGET)', not Linux. kbox requires a Linux-targeting compiler)
+endif
 endif
 endif
 
@@ -55,4 +61,7 @@ endif
 LKL_LIB   = $(LKL_DIR)/liblkl.a
 
 LDFLAGS += -L$(LKL_DIR) -L$(LKL_DIR)/lib
-LDLIBS   = -llkl -lpthread -ldl -lm -lrt
+LDLIBS   = -llkl -lm
+ifndef IS_ANDROID
+LDLIBS  += -lpthread -ldl -lrt
+endif

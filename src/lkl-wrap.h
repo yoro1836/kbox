@@ -163,6 +163,13 @@ long kbox_lkl_setgroups(const struct kbox_sysnrs *s,
                         const unsigned *list);
 long kbox_lkl_setfsgid(const struct kbox_sysnrs *s, long gid);
 
+/* Bionic's <sys/stat.h> defines st_{a,m,c}time_nsec as macros that
+ * expand to st_{a,m,c}tim.tv_nsec, which corrupts these field names.
+ */
+#undef st_atime_nsec
+#undef st_mtime_nsec
+#undef st_ctime_nsec
+
 struct kbox_lkl_stat {
     uint64_t st_dev;
     uint64_t st_ino;

@@ -16,7 +16,7 @@ KCONFIG_CONF := configs/Kconfig
 # Targets that don't require .config
 CONFIG_TARGETS    := config defconfig oldconfig savedefconfig clean distclean indent \
                      check-unit check-syntax check-commitlog fetch-lkl build-lkl \
-                     fetch-minislirp install-hooks guest-bins stress-bins rootfs
+                     build-lkl-android fetch-minislirp install-hooks guest-bins stress-bins rootfs
 CONFIG_GENERATORS := config defconfig oldconfig
 
 # Require .config for build targets.
