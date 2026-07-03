@@ -107,6 +107,8 @@ jobs:
             runner: ubuntu-24.04-arm
           - arch: riscv64
             runner: ubuntu-24.04-riscv
+          - arch: aarch64-android
+            runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
     steps:
@@ -118,6 +120,7 @@ jobs:
         with:
           path: ~/apt-cache
           key: apt-lkl-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('.github/workflows/build-lkl.yml') }}
+
       - name: Install build dependencies
         run: |
           mkdir -p ~/apt-cache
@@ -125,10 +128,22 @@ jobs:
           sudo apt-get install -y -o Dir::Cache::Archives=$HOME/apt-cache \
             build-essential flex bison bc libelf-dev
 
+      - name: Install Android NDK
+        if: contains(matrix.arch, 'android')
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q android-ndk-r27-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
+
       - name: Build LKL from source
         env:
           LKL_REF: ${{ needs.check-upstream.outputs.lkl_commit }}
-        run: make build-lkl
+        run: |
+          if [[ "${{ matrix.arch }}" == *"android"* ]]; then
+            make build-lkl-android
+          else
+            make build-lkl
+          fi
 
       - name: Package
         run: |
@@ -171,7 +186,7 @@ jobs:
           date=${BUILD_DATE}
           upstream=https://github.com/${{ env.LKL_UPSTREAM }}/commit/${LKL_COMMIT}
 
-          Contains: liblkl-x86_64.tar.gz, liblkl-aarch64.tar.gz, liblkl-riscv64.tar.gz
+          Contains: liblkl-x86_64.tar.gz, liblkl-aarch64.tar.gz, liblkl-riscv64.tar.gz, liblkl-aarch64-android.tar.gz
           Each tarball includes: liblkl.a, lkl.h, autoconf.h, vmlinux-gdb.py,
           BUILD_INFO, sha256sums.txt
           EOF
@@ -189,4 +204,5 @@ jobs:
             --prerelease \
             dist/liblkl-x86_64.tar.gz \
             dist/liblkl-aarch64.tar.gz \
-            dist/liblkl-riscv64.tar.gz
+            dist/liblkl-riscv64.tar.gz \
+            dist/liblkl-aarch64-android.tar.gz

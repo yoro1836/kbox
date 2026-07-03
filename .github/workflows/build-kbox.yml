@@ -161,7 +161,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
 
       - name: Fetch prebuilt LKL (aarch64)
-        run: LKL_DIR=lkl-aarch64-android ./scripts/fetch-lkl.sh aarch64
+        run: ANDROID_TARGET=1 LKL_DIR=lkl-aarch64-android ./scripts/fetch-lkl.sh aarch64
 
       - name: Configure
         run: make defconfig

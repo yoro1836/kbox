@@ -23,6 +23,12 @@ NIGHTLY_TAG="${KBOX_LKL_TAG:-lkl-nightly}"
 ASSET="${ASSET:-liblkl-${ARCH}.tar.gz}"
 SHA256_FILE="scripts/lkl-sha256.txt"
 
+# Android target: use Bionic-linked LKL artifact
+if [ "${ANDROID_TARGET:-}" = "1" ]; then
+    ASSET="liblkl-aarch64-android.tar.gz"
+    LKL_DIR="${LKL_DIR:-lkl-aarch64-android}"
+fi
+
 mkdir -p "$LKL_DIR"
 
 # Already present?
