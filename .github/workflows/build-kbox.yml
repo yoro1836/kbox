@@ -180,7 +180,7 @@ jobs:
             "
 
       - name: Upload LKL artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: lkl-aarch64-android
           path: lkl-aarch64-android/
@@ -201,7 +201,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
 
       - name: Download LKL artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: lkl-aarch64-android
           path: lkl-aarch64-android/
