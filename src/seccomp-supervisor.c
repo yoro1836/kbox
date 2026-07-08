@@ -604,12 +604,9 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
 
             if (exec_memfd >= 0) {
 #ifdef __ANDROID__
-                /* Bionic lacks fexecve(); use execveat via /proc/self/fd/N */
-                char fdpath[64];
-                snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d",
-                         exec_memfd);
-                (void) syscall(__NR_execveat, AT_EMPTY_PATH, fdpath,
-                               (char *const *) argv, environ, 0);
+                /* Bionic lacks fexecve(); use /proc/self/fd/N + AT_EMPTY_PATH */
+                (void) syscall(__NR_execveat, exec_memfd, "",
+                               (char *const *) argv, environ, AT_EMPTY_PATH);
 #else
                 fexecve(exec_memfd, (char *const *) argv, environ);
 #endif
