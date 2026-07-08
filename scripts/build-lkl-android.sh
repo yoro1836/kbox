@@ -88,29 +88,25 @@ NPROC=$(nproc 2>/dev/null || echo 1)
 NDK_BIN="${NDK_TOOLCHAIN}/bin"
 NDK_SYSROOT="${NDK_TOOLCHAIN}/sysroot"
 
-# Prepend NDK bin to PATH so the kernel build (with LLVM=1) can find ld.lld
-export PATH="${NDK_BIN}:${PATH}"
-
 # NDK uses LLVM tools, not GNU binutils. Create symlinks with the
-# CROSS_COMPILE prefix so the kernel build system can find them.
+# CROSS_COMPILE prefix so the kernel build system can find ${TOOL}
+# as ${CROSS_COMPILE}${TOOL}.
 SYMLINK_DIR=$(mktemp -d)
-for tool in ar nm ld objcopy objdump ranlib strip; do
+for tool in ar nm objcopy objdump ranlib strip; do
     ln -sf "${NDK_BIN}/llvm-${tool}" "${SYMLINK_DIR}/${NDK_TARGET}-${tool}" 2>/dev/null || true
 done
-# ld needs special handling: on an x86_64 host, ld.lld defaults to x86_64
-# output. Create a wrapper that passes -m aarch64linux so it produces
-# aarch64 code. We replace ld.lld directly in the NDK bin dir so that
-# ANY invocation (kernel link-vmlinux.sh, Kconfig checks, etc.) uses it.
+
+# ld: on an x86_64 host, ld.lld defaults to x86_64 output. Create a
+# wrapper that passes -m aarch64linux to produce aarch64 code.
+# IMPORTANT: Do NOT set LLVM=1 -- it would hardcode HOSTLD=ld.lld,
+# breaking host-tool linking (fixdep, etc.) by forcing aarch64 output.
 mv "${NDK_BIN}/ld.lld" "${NDK_BIN}/ld.lld.real"
 cat > "${NDK_BIN}/ld.lld" << LDEOF
 #!/bin/sh
 exec ${NDK_BIN}/ld.lld.real -m aarch64linux "\$@"
 LDEOF
 chmod +x "${NDK_BIN}/ld.lld"
-
-# Restore original ld.lld on exit (CI runners are ephemeral, but be clean).
 trap 'mv "${NDK_BIN}/ld.lld.real" "${NDK_BIN}/ld.lld"' EXIT
-
 ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
@@ -124,12 +120,14 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
+# Without LLVM=1, the kernel uses $(CROSS_COMPILE)ld for target linking
+# (our wrapper -> ld.lld -m aarch64linux) and the host's native gcc/ld
+# for host tools (HOSTCC/HOSTLD). This is exactly what we need.
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
-    LLVM=1 \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
