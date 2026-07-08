@@ -108,15 +108,12 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
-echo "  BUILD   ARCH=lkl kernel objects (Android, -j${NPROC})"
-# Build kernel objects. Ignore vmlinux link failure on x86_64 (ld.lld
-# defaults to x86_64 output). The .o files are enough for liblkl.a.
+echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
-    -j"${NPROC}" \
-    || true
+    -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}/tools/lkl" \
