@@ -162,7 +162,8 @@ jobs:
           # termux-docker container (non-root) can write to them.
           mkdir -p lkl-aarch64-android
           chmod 777 . lkl-aarch64-android
-          docker run --rm \
+          # Run as root so we can create /bin symlink (container is non-root by default)
+          docker run --rm --user root \
             -v ${{ github.workspace }}:/workspace \
             termux/termux-docker:aarch64 \
             sh -c "
