@@ -110,9 +110,16 @@ for tool in ar nm objcopy objdump ranlib strip; do
 done
 
 # ld.lld on an x86_64 host defaults to x86_64 output. Force aarch64.
+# Also handle -print-output-format which Makefile.autoconf uses.
 # ${NDK_BIN} expands at script-creation time; \$@ is passed through to the wrapper
 cat > "${SYMLINK_DIR}/${NDK_TARGET}-ld" << LDEOF
 #!/bin/sh
+for arg in "\$@"; do
+  if [ "\$arg" = "-print-output-format" ]; then
+    echo "elf64-littleaarch64"
+    exit 0
+  fi
+done
 exec ${NDK_BIN}/ld.lld -m aarch64linux "\$@"
 LDEOF
 chmod +x "${SYMLINK_DIR}/${NDK_TARGET}-ld"
@@ -144,8 +151,10 @@ TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
 TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
 make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
     CC="${CC_WITH_SYSROOT}" \
+    LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
+    CROSS_COMPILE="${CROSS_PREFIX}" \
     CFLAGS="${STATIC_FLAGS}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
