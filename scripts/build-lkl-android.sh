@@ -150,7 +150,7 @@ echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
 TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
 make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
-    CC="${CC_WITH_SYSROOT}" \
+    CC="${NDK_CC}" \
     LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
