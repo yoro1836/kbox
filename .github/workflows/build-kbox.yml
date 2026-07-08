@@ -168,8 +168,8 @@ jobs:
             sh -c "
               apt update -y &&
               apt install -y git make clang termux-exec &&
-              # termux may not have /bin/false that kernel build scripts expect
-              [ -x /bin/false ] || ln -sf "\$(command -v false)" /bin/false &&
+              # ensure /bin/false exists (kernel build scripts use it)
+              [ -x /bin/false ] || echo 'exit 1' > /bin/false && chmod +x /bin/false &&
               cd /workspace &&
               git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
               cd /workspace/lkl-src &&
