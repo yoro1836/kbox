@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Build liblkl.a for Android (Bionic libc) using Android NDK.
 #
-# NOTE: Supports both aarch64 native and x86_64 cross-compilation.
-#       The NDK cross-compiler targets aarch64-linux-android*.
+# NOTE: Requires an x86_64 host. NDK r27+ only ships prebuilt LLVM
+#       toolchains for linux-x86_64 (no linux-aarch64).
 #
 # Usage: ./scripts/build-lkl-android.sh
 #   Requires: ANDROID_NDK_HOME environment variable

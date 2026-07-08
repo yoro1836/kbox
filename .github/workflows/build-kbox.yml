@@ -148,8 +148,47 @@ jobs:
             !tests/stress/*.c
 
   # ---- Android cross-compilation verification ----
+  # ---- Android LKL build via termux-docker (native aarch64 Bionic) ----
+  build-android-lkl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU binfmt
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Build LKL in termux-docker
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            termux/termux-docker:aarch64 \
+            sh -c "
+              apt update -y &&
+              apt install -y git make clang &&
+              git clone --depth=1 https://github.com/lkl/linux.git /tmp/lkl-src &&
+              cd /tmp/lkl-src &&
+              make ARCH=lkl defconfig &&
+              make ARCH=lkl -j\$(nproc) &&
+              make -C tools/lkl -j\$(nproc) &&
+              mkdir -p /workspace/lkl-aarch64-android &&
+              cp tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
+              cp tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
+            "
+
+      - name: Upload LKL artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lkl-aarch64-android
+          path: lkl-aarch64-android/
+          retention-days: 1
+
+  # ---- Android kbox cross-compilation (needs build-android-lkl) ----
   build-android:
-    runs-on: ubuntu-24.04-arm
+    needs: build-android-lkl
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -160,15 +199,16 @@ jobs:
           unzip -q android-ndk-r27-linux.zip
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
 
+      - name: Download LKL artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: lkl-aarch64-android
+          path: lkl-aarch64-android/
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential flex bison bc libelf-dev
-
-      - name: Build LKL for Android (from source)
-        run: |
-          export PATH="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
-          make build-lkl-android
+          sudo apt-get install -y build-essential
 
       - name: Configure
         run: make defconfig
