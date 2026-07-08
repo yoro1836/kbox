@@ -35,6 +35,9 @@ NDK_CC="${NDK_TOOLCHAIN}/bin/${NDK_TARGET}-clang"
 
 [ -x "$NDK_CC" ] || die "NDK compiler not found: ${NDK_CC}"
 
+NDK_BIN="${NDK_TOOLCHAIN}/bin"
+NDK_SYSROOT="${NDK_TOOLCHAIN}/sysroot"
+
 LKL_DIR="${LKL_DIR:-lkl-aarch64-android}"
 LKL_SRC="${LKL_SRC:-build/lkl-src}"
 LKL_UPSTREAM="https://github.com/lkl/linux"
@@ -97,9 +100,6 @@ fi
 # ---- Build with NDK cross-compiler ----
 
 NPROC=$(nproc 2>/dev/null || echo 1)
-
-NDK_BIN="${NDK_TOOLCHAIN}/bin"
-NDK_SYSROOT="${NDK_TOOLCHAIN}/sysroot"
 
 # NDK uses LLVM tools, not GNU binutils. Create symlinks with the
 # CROSS_COMPILE prefix so the kernel build system can find ${TOOL}
