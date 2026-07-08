@@ -100,10 +100,13 @@ done
 # wrapper that passes -m aarch64linux to produce aarch64 code.
 # IMPORTANT: Do NOT set LLVM=1 -- it would hardcode HOSTLD=ld.lld,
 # breaking host-tool linking (fixdep, etc.) by forcing aarch64 output.
+#
+# Use exec -a ld.lld so that lld checks argv[0] and acts as the Unix
+# linker (ld.lld) rather than printing "lld is a generic driver".
 mv "${NDK_BIN}/ld.lld" "${NDK_BIN}/ld.lld.real"
 cat > "${NDK_BIN}/ld.lld" << LDEOF
 #!/bin/sh
-exec ${NDK_BIN}/ld.lld.real -m aarch64linux "\$@"
+exec -a ld.lld ${NDK_BIN}/ld.lld.real -m aarch64linux "\$@"
 LDEOF
 chmod +x "${NDK_BIN}/ld.lld"
 trap 'mv "${NDK_BIN}/ld.lld.real" "${NDK_BIN}/ld.lld"' EXIT
