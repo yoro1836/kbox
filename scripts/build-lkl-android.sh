@@ -125,6 +125,7 @@ make -C "${LKL_SRC}/tools/lkl" \
     NM="${NDK_BIN}/llvm-nm" \
     CFLAGS="${STATIC_FLAGS}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
+    CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"
 
 rm -rf "${SYMLINK_DIR}"
