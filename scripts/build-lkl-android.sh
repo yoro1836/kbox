@@ -97,8 +97,18 @@ SYMLINK_DIR=$(mktemp -d)
 for tool in ar nm ld objcopy objdump ranlib strip; do
     ln -sf "${NDK_BIN}/llvm-${tool}" "${SYMLINK_DIR}/${NDK_TARGET}-${tool}" 2>/dev/null || true
 done
-# ld needs special handling - use lld
+# ld needs special handling: on an x86_64 host, ld.lld defaults to x86_64
+# output. Create a wrapper that passes -m aarch64linux so it produces
+# aarch64 code. LD is separate from HOSTLD in the kernel build system,
+# so this does not affect host tools (kconfig).
 ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
+
+LD_WRAPPED="${SYMLINK_DIR}/ld-wrapped"
+cat > "${LD_WRAPPED}" << LDEOF
+#!/bin/sh
+exec ${NDK_BIN}/ld.lld -m aarch64linux "\$@"
+LDEOF
+chmod +x "${LD_WRAPPED}"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
@@ -111,15 +121,10 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
-# LLVM=1 + CROSS_COMPILE tells the kernel to use ld.lld for target linking.
-# We do NOT pass LD= explicitly -- that would also override HOSTLD (used for
-# host tools like kconfig), which must link against the host glibc, not Bionic.
-# KBUILD_CFLAGS is intentionally not set here: the kernel builds its own
-# fortified functions internally and does not reference glibc symbols.
-
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
+    LD="${LD_WRAPPED}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     LLVM=1 \
