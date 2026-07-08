@@ -148,42 +148,25 @@ jobs:
             !tests/stress/*.c
 
   # ---- Android cross-compilation verification ----
-  # ---- Android LKL build via termux-docker (native aarch64 Bionic) ----
+  # ---- Android LKL build: NDK cross-compilation on x86_64 ----
   build-android-lkl:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Build LKL in termux-docker
+      - name: Install Android NDK
         run: |
-          # Pre-create directories with open permissions so the
-          # termux-docker container (non-root) can write to them.
-          mkdir -p lkl-aarch64-android
-          chmod 777 . lkl-aarch64-android
-          # Run as root so we can create /bin symlink (container is non-root by default)
-          docker run --rm --user root \
-            -v ${{ github.workspace }}:/workspace \
-            termux/termux-docker:aarch64 \
-            sh -c "
-              apt update -y &&
-              apt install -y git make clang termux-exec &&
-              # Kernel Makefile hardcodes /bin/false; symlink /bin -> $PREFIX/bin
-              ln -sf \$PREFIX/bin /bin &&
-              cd /workspace &&
-              git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
-              cd /workspace/lkl-src &&
-              # HOSTCFLAGS: termux's clang 21 (Bionic) needs -include strings.h
-              # for bcmp() used by scripts/kconfig/confdata.c
-              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS=\"-include strings.h\" defconfig &&
-              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS=\"-include strings.h\" -j\$(nproc) &&
-              make -C tools/lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu -j\$(nproc) &&
-              cp tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
-              cp tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
-            "
-          # Verify the artifact was produced
-          test -f lkl-aarch64-android/liblkl.a || { echo 'LKL build failed: liblkl.a not found'; exit 1; }
+          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q android-ndk-r27-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
+
+      - name: Build LKL with NDK cross-compiler
+        run: |
+          ./scripts/build-lkl-android.sh
+        env:
+          LKL_DIR: lkl-aarch64-android
 
       - name: Upload LKL artifact
         uses: actions/upload-artifact@v7

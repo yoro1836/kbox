@@ -96,7 +96,13 @@ for tool in ar nm objcopy objdump ranlib strip; do
     ln -sf "${NDK_BIN}/llvm-${tool}" "${SYMLINK_DIR}/${NDK_TARGET}-${tool}" 2>/dev/null || true
 done
 
-ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
+# ld.lld on an x86_64 host defaults to x86_64 output. Force aarch64.
+# ${NDK_BIN} expands at script-creation time; \$@ is passed through to the wrapper
+cat > "${SYMLINK_DIR}/${NDK_TARGET}-ld" << LDEOF
+#!/bin/sh
+exec ${NDK_BIN}/ld.lld -m aarch64linux "\$@"
+LDEOF
+chmod +x "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
