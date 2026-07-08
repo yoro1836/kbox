@@ -99,8 +99,7 @@ for tool in ar nm ld objcopy objdump ranlib strip; do
 done
 # ld needs special handling: on an x86_64 host, ld.lld defaults to x86_64
 # output. Create a wrapper that passes -m aarch64linux so it produces
-# aarch64 code. LD is separate from HOSTLD in the kernel build system,
-# so this does not affect host tools (kconfig).
+# aarch64 code.
 ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 LD_WRAPPED="${SYMLINK_DIR}/ld-wrapped"
@@ -121,13 +120,14 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
+# Do NOT use LLVM=1: it hardcodes LD=ld.lld overriding our wrapper.
+# Instead pass LD + CC + CROSS_COMPILE explicitly.
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     LD="${LD_WRAPPED}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
-    LLVM=1 \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
