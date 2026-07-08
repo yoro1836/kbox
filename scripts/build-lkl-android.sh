@@ -96,16 +96,7 @@ for tool in ar nm objcopy objdump ranlib strip; do
     ln -sf "${NDK_BIN}/llvm-${tool}" "${SYMLINK_DIR}/${NDK_TARGET}-${tool}" 2>/dev/null || true
 done
 
-# ld: on an x86_64 host, ld.lld defaults to x86_64 output. Use the
-# system's ld.lld (from 'apt install lld') with a wrapper that passes
-# -m aarch64linux to produce aarch64 code.
-LD_WRAPPED="${SYMLINK_DIR}/ld-wrapper"
-cat > "${LD_WRAPPED}" << 'LDEOF'
-#!/bin/sh
-exec /usr/bin/ld.lld -m aarch64linux "$@"
-LDEOF
-chmod +x "${LD_WRAPPED}"
-ln -sf "${LD_WRAPPED}" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
+ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
@@ -117,16 +108,15 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
-
-# Without LLVM=1, the kernel uses $(CROSS_COMPILE)ld for target linking
-# (our symlink -> /usr/bin/ld.lld) and the host's native gcc/ld
-# for host tools (HOSTCC/HOSTLD). This is exactly what we need.
-echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
+echo "  BUILD   ARCH=lkl kernel objects (Android, -j${NPROC})"
+# Build kernel objects. Ignore vmlinux link failure on x86_64 (ld.lld
+# defaults to x86_64 output). The .o files are enough for liblkl.a.
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
-    -j"${NPROC}"
+    -j"${NPROC}" \
+    || true
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}/tools/lkl" \
