@@ -168,8 +168,9 @@ jobs:
             sh -c "
               apt update -y &&
               apt install -y git make clang &&
-              git clone --depth=1 https://github.com/lkl/linux.git /tmp/lkl-src &&
-              cd /tmp/lkl-src &&
+              cd /workspace &&
+              git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
+              cd /workspace/lkl-src &&
               make ARCH=lkl defconfig &&
               make ARCH=lkl -j\$(nproc) &&
               make -C tools/lkl -j\$(nproc) &&
