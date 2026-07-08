@@ -168,15 +168,15 @@ jobs:
             sh -c "
               apt update -y &&
               apt install -y git make clang termux-exec &&
-              # ensure /bin exists and /bin/false is available (kernel build scripts use it)
-              mkdir -p /bin && [ -x /bin/false ] || echo 'exit 1' > /bin/false && chmod +x /bin/false &&
+              # Kernel Makefile hardcodes /bin/false; symlink /bin -> $PREFIX/bin
+              ln -sf \$PREFIX/bin /bin &&
               cd /workspace &&
               git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
               cd /workspace/lkl-src &&
               # HOSTCFLAGS: termux's clang 21 (Bionic) needs -include strings.h
               # for bcmp() used by scripts/kconfig/confdata.c
-              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-include strings.h" defconfig &&
-              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS="-include strings.h" -j\$(nproc) &&
+              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS=\"-include strings.h\" defconfig &&
+              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu HOSTCFLAGS=\"-include strings.h\" -j\$(nproc) &&
               make -C tools/lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu -j\$(nproc) &&
               cp tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
               cp tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
