@@ -138,7 +138,10 @@ make -C "${LKL_SRC}" ARCH=lkl \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
-make -C "${LKL_SRC}/tools/lkl" liblkl.a \
+# $(OUTPUT) = $(CURDIR)/ in the tools/lkl Makefile, so the
+# actual target is an absolute path. Use it explicitly.
+TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
+make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_DIR}/liblkl.a" \
     CC="${CC_WITH_SYSROOT}" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
