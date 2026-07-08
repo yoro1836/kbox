@@ -114,14 +114,15 @@ STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 # LLVM=1 + CROSS_COMPILE tells the kernel to use ld.lld for target linking.
 # We do NOT pass LD= explicitly -- that would also override HOSTLD (used for
 # host tools like kconfig), which must link against the host glibc, not Bionic.
+# KBUILD_CFLAGS is intentionally not set here: the kernel builds its own
+# fortified functions internally and does not reference glibc symbols.
 
-echo "  BUILD   ARCH=lkl kernel (Android, static, -j${NPROC})"
+echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     LLVM=1 \
-    KBUILD_CFLAGS="${STATIC_FLAGS}" \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
