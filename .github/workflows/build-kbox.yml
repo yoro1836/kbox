@@ -177,6 +177,7 @@ jobs:
       - name: Verify binary
         run: |
           file kbox | grep -q "aarch64" || { echo "Not an aarch64 binary"; exit 1; }
+          file kbox | grep -q "statically linked" || { echo "Not statically linked"; exit 1; }
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v7

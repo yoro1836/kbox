@@ -25,6 +25,9 @@ STRIP   := $(NDK_TOOLCHAIN)/bin/llvm-strip
 
 # Android-specific flags
 IS_ANDROID := 1
-CFLAGS     += -DANDROID -D__ANDROID_API__=$(ANDROID_API)
+CFLAGS     += -DANDROID -D__ANDROID_API__=$(ANDROID_API) -DNDEBUG
+# Fully static linking: no dynamic dependencies at runtime.
+# This also resolves glibc symbols at build time via NDK static libs.
+LDFLAGS    += -static
 
 endif

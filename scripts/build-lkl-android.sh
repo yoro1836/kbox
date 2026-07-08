@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Build liblkl.a for Android (Bionic libc) using Android NDK.
 #
-# NOTE: Must be run on an aarch64 host (native or CI runner).
-#       Cross-compilation from x86_64 is not supported because
-#       ARCH=lkl always targets the host architecture.
+# NOTE: Supports both aarch64 native and x86_64 cross-compilation.
+#       The NDK cross-compiler targets aarch64-linux-android*.
 #
 # Usage: ./scripts/build-lkl-android.sh
 #   Requires: ANDROID_NDK_HOME environment variable
@@ -104,6 +103,11 @@ CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 # still append -fintegrated-as and other required flags.
 CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 
+# Static build flags: disable fortification to avoid glibc-specific symbols
+# (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
+# Also disable assertions to avoid __assert_fail.
+STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
+
 # Wrap ld.lld with --target flag so the kernel link step uses aarch64
 LD_WRAPPED="${SYMLINK_DIR}/ld-wrapped"
 cat > "${LD_WRAPPED}" <<EOF
@@ -112,20 +116,23 @@ exec "${NDK_BIN}/ld.lld" --target=aarch64-linux-gnu "\$@"
 EOF
 chmod +x "${LD_WRAPPED}"
 
-echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
+echo "  BUILD   ARCH=lkl kernel (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
     LD="${LD_WRAPPED}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     LLVM=1 \
+    KBUILD_CFLAGS="${STATIC_FLAGS}" \
     -j"${NPROC}"
 
-echo "  BUILD   tools/lkl (Android, -j${NPROC})"
+echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}/tools/lkl" \
     CC="${CC_WITH_SYSROOT}" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
+    CFLAGS="${STATIC_FLAGS}" \
+    LDFLAGS="-static ${STATIC_FLAGS}" \
     -j"${NPROC}"
 
 rm -rf "${SYMLINK_DIR}"
