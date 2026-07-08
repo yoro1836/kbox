@@ -140,10 +140,8 @@ make -C "${LKL_SRC}" ARCH=lkl \
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}/tools/lkl" liblkl.a \
     CC="${CC_WITH_SYSROOT}" \
-    LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
-    CROSS_COMPILE="${CROSS_PREFIX}" \
     CFLAGS="${STATIC_FLAGS}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
