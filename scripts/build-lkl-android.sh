@@ -108,18 +108,13 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
-# Wrap ld.lld with --target flag so the kernel link step uses aarch64
-LD_WRAPPED="${SYMLINK_DIR}/ld-wrapped"
-cat > "${LD_WRAPPED}" <<EOF
-#!/bin/sh
-exec "${NDK_BIN}/ld.lld" --target=aarch64-linux-gnu "\$@"
-EOF
-chmod +x "${LD_WRAPPED}"
+# LLVM=1 + CROSS_COMPILE tells the kernel to use ld.lld for target linking.
+# We do NOT pass LD= explicitly -- that would also override HOSTLD (used for
+# host tools like kconfig), which must link against the host glibc, not Bionic.
 
 echo "  BUILD   ARCH=lkl kernel (Android, static, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
-    LD="${LD_WRAPPED}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     LLVM=1 \
