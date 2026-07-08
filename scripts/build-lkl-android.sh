@@ -115,8 +115,11 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
+# The kernel overrides LD to ld.lld when it detects clang.
+# Set it explicitly to our wrapper (which forces -m aarch64linux).
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
+    LD="${CROSS_PREFIX}ld" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"
