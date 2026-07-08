@@ -138,7 +138,7 @@ make -C "${LKL_SRC}" ARCH=lkl \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
-make -C "${LKL_SRC}/tools/lkl" \
+make -C "${LKL_SRC}/tools/lkl" liblkl.a \
     CC="${CC_WITH_SYSROOT}" \
     LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
