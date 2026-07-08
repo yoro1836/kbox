@@ -99,15 +99,19 @@ for tool in ar nm ld objcopy objdump ranlib strip; do
 done
 # ld needs special handling: on an x86_64 host, ld.lld defaults to x86_64
 # output. Create a wrapper that passes -m aarch64linux so it produces
-# aarch64 code.
-ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
-
-LD_WRAPPED="${SYMLINK_DIR}/ld-wrapped"
-cat > "${LD_WRAPPED}" << LDEOF
+# aarch64 code. We replace ld.lld directly in the NDK bin dir so that
+# ANY invocation (kernel link-vmlinux.sh, Kconfig checks, etc.) uses it.
+mv "${NDK_BIN}/ld.lld" "${NDK_BIN}/ld.lld.real"
+cat > "${NDK_BIN}/ld.lld" << LDEOF
 #!/bin/sh
-exec ${NDK_BIN}/ld.lld -m aarch64linux "\$@"
+exec ${NDK_BIN}/ld.lld.real -m aarch64linux "\$@"
 LDEOF
-chmod +x "${LD_WRAPPED}"
+chmod +x "${NDK_BIN}/ld.lld"
+
+# Restore original ld.lld on exit (CI runners are ephemeral, but be clean).
+trap 'mv "${NDK_BIN}/ld.lld.real" "${NDK_BIN}/ld.lld"' EXIT
+
+ln -sf "${NDK_BIN}/ld.lld" "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
@@ -120,14 +124,12 @@ CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
-# Do NOT use LLVM=1: it hardcodes LD=ld.lld overriding our wrapper.
-# Instead pass LD + CC + CROSS_COMPILE explicitly.
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 make -C "${LKL_SRC}" ARCH=lkl \
     CC="${CC_WITH_SYSROOT}" \
-    LD="${LD_WRAPPED}" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
+    LLVM=1 \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
