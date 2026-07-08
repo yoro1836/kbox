@@ -88,6 +88,9 @@ NPROC=$(nproc 2>/dev/null || echo 1)
 NDK_BIN="${NDK_TOOLCHAIN}/bin"
 NDK_SYSROOT="${NDK_TOOLCHAIN}/sysroot"
 
+# Prepend NDK bin to PATH so the kernel build (with LLVM=1) can find ld.lld
+export PATH="${NDK_BIN}:${PATH}"
+
 # NDK uses LLVM tools, not GNU binutils. Create symlinks with the
 # CROSS_COMPILE prefix so the kernel build system can find them.
 SYMLINK_DIR=$(mktemp -d)
