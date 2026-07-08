@@ -171,9 +171,9 @@ jobs:
               cd /workspace &&
               git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
               cd /workspace/lkl-src &&
-              make ARCH=lkl defconfig &&
-              make ARCH=lkl -j\$(nproc) &&
-              make -C tools/lkl -j\$(nproc) &&
+              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu defconfig &&
+              make ARCH=lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu -j\$(nproc) &&
+              make -C tools/lkl CLANG_TARGET_FLAGS=aarch64-linux-gnu -j\$(nproc) &&
               cp tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
               cp tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
             "
