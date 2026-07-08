@@ -78,6 +78,19 @@ if [ ! -f "${LKL_SRC}/.config" ]; then
         "${LKL_SRC}/scripts/config" --file "${LKL_SRC}/.config" --disable "${opt}"
     done
 
+    # OUTPUT_FORMAT is auto-detected during defconfig using the HOST compiler
+    # (x86_64 gcc), which yields "elf64-x86-64". Detect the actual format
+    # from a test object compiled with the NDK cross-compiler instead.
+    echo 'void foo(void) {}' | "${NDK_CC}" -x c - -c -o /tmp/lkl-format-test.o 2>/dev/null && \
+      LKL_FORMAT=$("${NDK_BIN}/llvm-objdump" -p /tmp/lkl-format-test.o 2>/dev/null \
+        | awk '/file format/ {print $4}') && \
+      rm -f /tmp/lkl-format-test.o
+    if [ -n "${LKL_FORMAT}" ]; then
+      echo "  FORMAT  ${LKL_FORMAT} (from cross-compiler)"
+      "${LKL_SRC}/scripts/config" --file "${LKL_SRC}/.config" \
+        --set-str OUTPUT_FORMAT "${LKL_FORMAT}"
+    fi
+
     make -C "${LKL_SRC}" ARCH=lkl olddefconfig
 fi
 
