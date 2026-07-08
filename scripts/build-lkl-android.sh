@@ -155,7 +155,7 @@ make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
-    CFLAGS="${STATIC_FLAGS}" \
+    CFLAGS="-I${LKL_SRC}/tools/lkl/include ${STATIC_FLAGS}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"
