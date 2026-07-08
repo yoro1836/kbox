@@ -168,8 +168,8 @@ jobs:
             sh -c "
               apt update -y &&
               apt install -y git make clang termux-exec &&
-              # ensure /bin/false exists (kernel build scripts use it)
-              [ -x /bin/false ] || echo 'exit 1' > /bin/false && chmod +x /bin/false &&
+              # ensure /bin exists and /bin/false is available (kernel build scripts use it)
+              mkdir -p /bin && [ -x /bin/false ] || echo 'exit 1' > /bin/false && chmod +x /bin/false &&
               cd /workspace &&
               git clone --depth=1 https://github.com/lkl/linux.git lkl-src &&
               cd /workspace/lkl-src &&
