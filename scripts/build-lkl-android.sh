@@ -105,7 +105,7 @@ done
 # linker (ld.lld) rather than printing "lld is a generic driver".
 mv "${NDK_BIN}/ld.lld" "${NDK_BIN}/ld.lld.real"
 cat > "${NDK_BIN}/ld.lld" << LDEOF
-#!/bin/sh
+#!/bin/bash
 exec -a ld.lld ${NDK_BIN}/ld.lld.real -m aarch64linux "\$@"
 LDEOF
 chmod +x "${NDK_BIN}/ld.lld"
