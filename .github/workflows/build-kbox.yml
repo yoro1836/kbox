@@ -162,6 +162,10 @@ jobs:
 
       - name: Build LKL in termux-docker
         run: |
+          # Pre-create directories with open permissions so the
+          # termux-docker container (non-root) can write to them.
+          mkdir -p lkl-aarch64-android
+          chmod 777 . lkl-aarch64-android
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             termux/termux-docker:aarch64 \
@@ -174,10 +178,11 @@ jobs:
               make ARCH=lkl defconfig &&
               make ARCH=lkl -j\$(nproc) &&
               make -C tools/lkl -j\$(nproc) &&
-              mkdir -p /workspace/lkl-aarch64-android &&
               cp tools/lkl/liblkl.a /workspace/lkl-aarch64-android/ &&
               cp tools/lkl/include/lkl.h /workspace/lkl-aarch64-android/ 2>/dev/null || true
             "
+          # Verify the artifact was produced
+          test -f lkl-aarch64-android/liblkl.a || { echo 'LKL build failed: liblkl.a not found'; exit 1; }
 
       - name: Upload LKL artifact
         uses: actions/upload-artifact@v7
