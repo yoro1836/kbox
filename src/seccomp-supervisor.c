@@ -608,7 +608,7 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
                 char fdpath[64];
                 snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d",
                          exec_memfd);
-                (void) syscall(__NR_execveat, AT_FDCWD, fdpath,
+                (void) syscall(__NR_execveat, AT_EMPTY_PATH, fdpath,
                                (char *const *) argv, environ, 0);
 #else
                 fexecve(exec_memfd, (char *const *) argv, environ);
