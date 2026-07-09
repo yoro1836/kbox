@@ -69,7 +69,7 @@ jobs:
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
-          unzip -q android-ndk-r27-linux.zip
+          unzip -qo android-ndk-r27-linux.zip
           rm android-ndk-r27-linux.zip
 
       - name: ccache config
@@ -117,7 +117,7 @@ jobs:
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
-          unzip -q android-ndk-r27-linux.zip
+          unzip -qo android-ndk-r27-linux.zip
           rm android-ndk-r27-linux.zip
 
       - name: Download LKL artifact
