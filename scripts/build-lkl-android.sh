@@ -129,6 +129,10 @@ CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 # Pass --sysroot via CC, not CLANG_FLAGS, so Makefile.clang can
 # still append -fintegrated-as and other required flags.
 CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
+CCACHE_CMD="${CCACHE:-}"
+if [ -n "${CCACHE_CMD}" ]; then
+    CC_WITH_SYSROOT="${CCACHE_CMD} ${CC_WITH_SYSROOT}"
+fi
 
 # Static build flags: disable fortification to avoid glibc-specific symbols
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
@@ -149,8 +153,12 @@ echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 # actual target is an absolute path. Use it explicitly.
 TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
 TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
+TOOLS_CC="${NDK_CC}"
+if [ -n "${CCACHE_CMD}" ]; then
+    TOOLS_CC="${CCACHE_CMD} ${TOOLS_CC}"
+fi
 make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
-    CC="${NDK_CC}" \
+    CC="${TOOLS_CC}" \
     LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
