@@ -73,11 +73,11 @@ int kbox_shadow_create(const struct kbox_sysnrs *s, long lkl_fd)
     /* Grant execute permission so execveat(AT_EMPTY_PATH) works.
      * memfd_create with MFD_EXEC would be cleaner but requires kernel 5.17+
      * and Android 12+, while we target Android 11 (API 30 / kernel 5.10).
+     * On some kernels (e.g. Android 6.1) fchmod fails with EACCES;
+     * the supervisor child falls back to execv(/proc/self/fd/N) instead.
      */
     if (fchmod(memfd, 0755) < 0) {
-        int e = errno;
-        close(memfd);
-        return -e;
+        /* Non-fatal: supervisor child's execveat fallback handles it. */
     }
 
     if (kst.st_size == 0)
