@@ -126,22 +126,24 @@ chmod +x "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
-# Pass --sysroot via CC, not CLANG_FLAGS, so Makefile.clang can
-# still append -fintegrated-as and other required flags.
-CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
-CCACHE_CMD="${CCACHE:-}"
-
 # Static build flags: disable fortification to avoid glibc-specific symbols
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
-# ccache wrapped CC for kernel build (NOT for kconfig which misbehaves
-# when CC contains a wrapper prefix).
-KERNEL_CC="${CC_WITH_SYSROOT}"
+CCACHE_CMD="${CCACHE:-}"
+
+# CC without --sysroot: Kconfig's Kconfig.include runs "command -v \$(CC)",
+# and --sysroot= looks like a command name to command -v, causing "C compiler
+# not found".  Pass --sysroot via CLANG_FLAGS / CFLAGS instead.
+CC_PLAIN="${NDK_CC}"
+
+# Kernel build: ccache-wrapped CC + sysroot via CLANG_FLAGS
+KERNEL_CC="${CC_PLAIN}"
 if [ -n "${CCACHE_CMD}" ]; then
     KERNEL_CC="${CCACHE_CMD} ${KERNEL_CC}"
 fi
+KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu --sysroot=${NDK_SYSROOT}"
 
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 # The kernel will override LD to ld.lld when it detects clang.
@@ -152,15 +154,16 @@ make -C "${LKL_SRC}" ARCH=lkl \
     CC="${KERNEL_CC}" \
     LD="${CROSS_PREFIX}ld" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
+    CLANG_FLAGS="${KERNEL_CLANG_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
-# $(OUTPUT) = $(CURDIR)/ in the tools/lkl Makefile, so the
+# \$(OUTPUT) = \$(CURDIR)/ in the tools/lkl Makefile, so the
 # actual target is an absolute path. Use it explicitly.
 TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
 TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
-TOOLS_CC="${NDK_CC}"
+TOOLS_CC="${CC_PLAIN}"
 if [ -n "${CCACHE_CMD}" ]; then
     TOOLS_CC="${CCACHE_CMD} ${TOOLS_CC}"
 fi
@@ -170,6 +173,7 @@ make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
+    CFLAGS="--sysroot=${NDK_SYSROOT}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"
