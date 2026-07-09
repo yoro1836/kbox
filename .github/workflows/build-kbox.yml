@@ -52,7 +52,7 @@ jobs:
       - name: Static analysis (cppcheck)
         run: .ci/check-cppcheck.sh
 
-  build-android-lkl:
+  build-android:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -72,6 +72,23 @@ jobs:
           unzip -qo android-ndk-r27-linux.zip
           rm android-ndk-r27-linux.zip
 
+      # Restore LKL artifact from cache if available (faster than rebuild)
+      - name: Cache LKL artifact
+        id: cache-lkl
+        uses: actions/cache@v5
+        with:
+          path: lkl-aarch64-android
+          key: lkl-android-aarch64-${{ hashFiles('scripts/fetch-lkl.sh', 'scripts/build-lkl-android.sh') }}
+
+      - name: Build LKL with NDK cross-compiler
+        if: steps.cache-lkl.outputs.cache-hit != 'true'
+        run: |
+          ANDROID_NDK_HOME=$PWD/android-ndk-r27 \
+          CCACHE=ccache \
+          ./scripts/build-lkl-android.sh
+        env:
+          LKL_DIR: lkl-aarch64-android
+
       - name: ccache config
         run: |
           echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> "$GITHUB_ENV"
@@ -85,48 +102,7 @@ jobs:
           restore-keys: |
             ccache-lkl-${{ runner.os }}-
 
-      - name: Build LKL with NDK cross-compiler
-        run: |
-          ANDROID_NDK_HOME=$PWD/android-ndk-r27 \
-          CCACHE=ccache \
-          ./scripts/build-lkl-android.sh
-        env:
-          LKL_DIR: lkl-aarch64-android
-
-      - name: Upload LKL artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: lkl-aarch64-android
-          path: lkl-aarch64-android/
-          retention-days: 1
-
-  build-android:
-    needs: build-android-lkl
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Cache NDK
-        uses: actions/cache@v5
-        with:
-          path: android-ndk-r27
-          key: ndk-r27-${{ runner.os }}
-
-      - name: Install Android NDK (cache miss)
-        if: steps.cache-ndk.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
-          unzip -qo android-ndk-r27-linux.zip
-          rm android-ndk-r27-linux.zip
-
-      - name: Download LKL artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: lkl-aarch64-android
-          path: lkl-aarch64-android/
-
-      - name: Configure
+      - name: Configure kbox
         run: make defconfig
         env:
           ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk-r27
