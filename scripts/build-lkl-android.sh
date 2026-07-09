@@ -147,6 +147,8 @@ echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 # The kernel will override LD to ld.lld when it detects clang.
 # Set it explicitly to our wrapper (which forces -m aarch64linux).
 make -C "${LKL_SRC}" ARCH=lkl \
+    HOSTCC=gcc \
+    HOSTCXX=g++ \
     CC="${KERNEL_CC}" \
     LD="${CROSS_PREFIX}ld" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
