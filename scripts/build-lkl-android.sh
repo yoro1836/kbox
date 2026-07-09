@@ -130,19 +130,24 @@ CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 # still append -fintegrated-as and other required flags.
 CC_WITH_SYSROOT="${NDK_CC} --sysroot=${NDK_SYSROOT}"
 CCACHE_CMD="${CCACHE:-}"
-if [ -n "${CCACHE_CMD}" ]; then
-    CC_WITH_SYSROOT="${CCACHE_CMD} ${CC_WITH_SYSROOT}"
-fi
 
 # Static build flags: disable fortification to avoid glibc-specific symbols
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
+
+# ccache wrapped CC for kernel build (NOT for kconfig which misbehaves
+# when CC contains a wrapper prefix).
+KERNEL_CC="${CC_WITH_SYSROOT}"
+if [ -n "${CCACHE_CMD}" ]; then
+    KERNEL_CC="${CCACHE_CMD} ${KERNEL_CC}"
+fi
+
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
-# The kernel overrides LD to ld.lld when it detects clang.
+# The kernel will override LD to ld.lld when it detects clang.
 # Set it explicitly to our wrapper (which forces -m aarch64linux).
 make -C "${LKL_SRC}" ARCH=lkl \
-    CC="${CC_WITH_SYSROOT}" \
+    CC="${KERNEL_CC}" \
     LD="${CROSS_PREFIX}ld" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
