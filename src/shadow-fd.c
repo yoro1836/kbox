@@ -32,6 +32,9 @@
 #ifndef MFD_ALLOW_SEALING
 #define MFD_ALLOW_SEALING 0x0002U
 #endif
+#ifndef MFD_EXEC
+#define MFD_EXEC 0x0010U
+#endif
 
 #include "lkl-wrap.h"
 #include "seccomp.h"
@@ -60,7 +63,7 @@ int kbox_shadow_create(const struct kbox_sysnrs *s, long lkl_fd)
     if (kst.st_size > KBOX_SHADOW_MAX_SIZE)
         return -EFBIG;
 
-    int memfd = memfd_create("kbox-shadow", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    int memfd = memfd_create("kbox-shadow", MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_EXEC);
     if (memfd < 0)
         return -errno;
 
