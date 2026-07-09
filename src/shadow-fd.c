@@ -32,9 +32,6 @@
 #ifndef MFD_ALLOW_SEALING
 #define MFD_ALLOW_SEALING 0x0002U
 #endif
-#ifndef MFD_EXEC
-#define MFD_EXEC 0x0010U
-#endif
 
 #include "lkl-wrap.h"
 #include "seccomp.h"
@@ -63,11 +60,21 @@ int kbox_shadow_create(const struct kbox_sysnrs *s, long lkl_fd)
     if (kst.st_size > KBOX_SHADOW_MAX_SIZE)
         return -EFBIG;
 
-    int memfd = memfd_create("kbox-shadow", MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_EXEC);
+    int memfd = memfd_create("kbox-shadow", MFD_CLOEXEC | MFD_ALLOW_SEALING);
     if (memfd < 0)
         return -errno;
 
     if (ftruncate(memfd, (off_t) kst.st_size) < 0) {
+        int e = errno;
+        close(memfd);
+        return -e;
+    }
+
+    /* Grant execute permission so execveat(AT_EMPTY_PATH) works.
+     * memfd_create with MFD_EXEC would be cleaner but requires kernel 5.17+
+     * and Android 12+, while we target Android 11 (API 30 / kernel 5.10).
+     */
+    if (fchmod(memfd, 0755) < 0) {
         int e = errno;
         close(memfd);
         return -e;

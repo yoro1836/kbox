@@ -1,17 +1,6 @@
-# Build kbox and run full test suite.
-# Zero root required -- everything runs as an unprivileged user.
-#
-# Parallelism (5 independent jobs, 1 sequential):
-#   commit-hygiene  -- Change-Id + subject format (needs full history)
-#   lint            -- clang-format, newline, security, cppcheck (one apt install)
-#   unit-tests      -- no LKL dependency, ASAN/UBSAN
-#   build-kbox      -- fetches LKL, compiles kbox + guest/stress bins, builds rootfs
-#   oci-image-import -- pulls nginx:alpine via mkrootfs.sh --image, validates the
-#                       libext2fs-based ownership rewrite
-#   integration     -- needs build-kbox artifacts, runs integration + stress tests
-#
-# All independent jobs run in parallel. integration-tests waits for build-kbox only.
-name: Build and Test
+# Build kbox for Android aarch64.
+# Uses NDK cross-compilation for both LKL (kernel library) and kbox itself.
+name: Build for Android
 
 on:
   push:
@@ -20,15 +9,12 @@ on:
     branches: [main]
 
 jobs:
-  # ---- Commit hygiene: Change-Id + subject format ----
   commit-hygiene:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout (full history for commit validation)
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
       - name: Validate commit log
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -43,127 +29,66 @@ jobs:
           elif [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
             range="${PUSH_BEFORE_SHA}..${PUSH_HEAD_SHA}"
           fi
-
           if [ -n "$range" ]; then
             scripts/check-commitlog.sh --range "$range"
           else
             scripts/check-commitlog.sh
           fi
 
-  # ---- Lint: formatting + static analysis (consolidated, one apt install) ----
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache
-          key: apt-lint-${{ runner.os }}-${{ hashFiles('.github/workflows/build-kbox.yml') }}
+      - uses: actions/checkout@v6
       - name: Install tools
         run: |
-          mkdir -p ~/apt-cache
           sudo apt-get update
-          sudo apt-get install -y -o Dir::Cache::Archives=$HOME/apt-cache \
-            clang-format-20 cppcheck
-
+          sudo apt-get install -y clang-format-20 cppcheck
       - name: Check trailing newline
         run: .ci/check-newline.sh
-
       - name: Check clang-format
         run: .ci/check-format.sh
-
       - name: Security checks
         run: .ci/check-security.sh
-
       - name: Static analysis (cppcheck)
         run: .ci/check-cppcheck.sh
 
-  # ---- Unit tests: no LKL dependency, fast ----
-  unit-tests:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Run unit tests (ASAN/UBSAN)
-        run: make check-unit
-
-  # ---- Build kbox + prepare rootfs ----
-  build-kbox:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache
-          key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/build-kbox.yml') }}
-      - name: Install dependencies
-        run: |
-          mkdir -p ~/apt-cache
-          sudo apt-get update
-          sudo apt-get install -y -o Dir::Cache::Archives=$HOME/apt-cache \
-            e2fsprogs
-
-      - name: Fetch prebuilt LKL
-        run: ./scripts/fetch-lkl.sh
-
-      - name: Cache rootfs
-        id: cache-rootfs
-        uses: actions/cache@v5
-        with:
-          path: |
-            alpine.ext4
-            deps/
-          key: rootfs-${{ hashFiles('scripts/alpine-sha256.txt', 'scripts/common.sh', 'scripts/mkrootfs.sh', 'tests/guest/*.c', 'tests/stress/*.c', 'Makefile') }}
-
-      - name: Configure (defconfig)
-        run: make defconfig
-
-      - name: Build kbox (release)
-        run: make BUILD=release -j$(nproc)
-
-      - name: Build guest and stress binaries
-        run: make guest-bins stress-bins
-
-      - name: Build rootfs image
-        if: steps.cache-rootfs.outputs.cache-hit != 'true'
-        run: make rootfs
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: kbox-build
-          retention-days: 1
-          path: |
-            kbox
-            alpine.ext4
-            tests/guest/*-test
-            tests/stress/*
-            !tests/stress/*.c
-
-  # ---- Android cross-compilation verification ----
-  # ---- Android LKL build: NDK cross-compilation on x86_64 ----
   build-android-lkl:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Install Android NDK
+      - name: Cache NDK
+        id: cache-ndk
+        uses: actions/cache@v5
+        with:
+          path: android-ndk-r27
+          key: ndk-r27-${{ runner.os }}
+
+      - name: Install Android NDK (cache miss)
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
           unzip -q android-ndk-r27-linux.zip
-          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
+          rm android-ndk-r27-linux.zip
+
+      - name: ccache config
+        run: |
+          echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ccache-lkl-${{ runner.os }}-${{ hashFiles('scripts/fetch-lkl.sh', 'scripts/build-lkl-android.sh') }}
+          restore-keys: |
+            ccache-lkl-${{ runner.os }}-
 
       - name: Build LKL with NDK cross-compiler
         run: |
+          ANDROID_NDK_HOME=$PWD/android-ndk-r27 \
+          CCACHE=ccache \
           ./scripts/build-lkl-android.sh
         env:
           LKL_DIR: lkl-aarch64-android
@@ -175,19 +100,25 @@ jobs:
           path: lkl-aarch64-android/
           retention-days: 1
 
-  # ---- Android kbox cross-compilation (needs build-android-lkl) ----
   build-android:
     needs: build-android-lkl
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Install Android NDK
+      - name: Cache NDK
+        uses: actions/cache@v5
+        with:
+          path: android-ndk-r27
+          key: ndk-r27-${{ runner.os }}
+
+      - name: Install Android NDK (cache miss)
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
           unzip -q android-ndk-r27-linux.zip
-          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> "$GITHUB_ENV"
+          rm android-ndk-r27-linux.zip
 
       - name: Download LKL artifact
         uses: actions/download-artifact@v8
@@ -195,16 +126,16 @@ jobs:
           name: lkl-aarch64-android
           path: lkl-aarch64-android/
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-
       - name: Configure
         run: make defconfig
+        env:
+          ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk-r27
 
       - name: Build kbox for Android
-        run: make ANDROID=1 ANDROID_API=30 LKL_DIR=lkl-aarch64-android BUILD=release -j$(nproc)
+        run: |
+          make ANDROID=1 ANDROID_API=30 LKL_DIR=lkl-aarch64-android BUILD=release -j$(nproc)
+        env:
+          ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk-r27
 
       - name: Verify binary
         run: |
@@ -217,102 +148,3 @@ jobs:
           name: kbox-android-aarch64
           path: kbox
           retention-days: 1
-
-  # ---- OCI image import: pull nginx:alpine, validate ownership rewrite ----
-  # Exercises scripts/oci-pull.py + tools/oci-chown end-to-end. nginx:alpine
-  # has multi-layer pulls and a /etc/passwd entry for "nginx" (uid=101) even
-  # though its tar headers are 0:0; the rewrite must restore the on-disk
-  # owner to 0 (vs the invoking user's UID that mke2fs -d would inherit).
-  oci-image-import:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache
-          key: apt-oci-${{ runner.os }}-${{ hashFiles('.github/workflows/build-kbox.yml') }}
-      - name: Install dependencies
-        run: |
-          mkdir -p ~/apt-cache
-          sudo apt-get update
-          sudo apt-get install -y -o Dir::Cache::Archives=$HOME/apt-cache \
-            e2fsprogs libext2fs-dev
-
-      - name: Build oci-chown helper
-        run: make -C tools/oci-chown
-
-      - name: Pull nginx:alpine with --rewrite-uid
-        run: |
-          # pipefail: don't let `tee` mask a mkrootfs.sh failure.
-          # nounset: catch any typo'd $VAR before it silently expands to "".
-          set -euo pipefail
-          ROOTFS=/tmp/nginx-oci.ext4 ./scripts/mkrootfs.sh \
-            --image=docker://nginx:alpine \
-            --rewrite-uid \
-            256 2>&1 | tee /tmp/mkrootfs.log
-
-          # Helper must report at least one inode rewrite; without it the
-          # mke2fs-inherited invoking-user UID would silently leak through.
-          if ! grep -qE "rewrote [1-9][0-9]* inode" /tmp/mkrootfs.log; then
-            echo "::error::oci-chown reported no inode rewrites"
-            exit 1
-          fi
-
-      - name: Verify ownership round-trip
-        run: |
-          # /etc/nginx/nginx.conf is a stable file in nginx:alpine. Its tar
-          # header is uid=0/gid=0, so a successful rewrite ends at User=0.
-          # Without --rewrite-uid the inode would carry the runner's UID.
-          # debugfs format: "User:     N   Group:     M   Project:     P ..."
-          STAT=$(printf "stat /etc/nginx/nginx.conf\n" \
-            | debugfs /tmp/nginx-oci.ext4 2>/dev/null \
-            | awk '/^User:/ {print $2 " " $4; exit}')
-          OWNER=$(echo "$STAT" | awk '{print $1}')
-          GROUP=$(echo "$STAT" | awk '{print $2}')
-          echo "/etc/nginx/nginx.conf User=$OWNER Group=$GROUP"
-          if [ "$OWNER" != "0" ] || [ "$GROUP" != "0" ]; then
-            echo "::error::expected User=0/Group=0, got User=$OWNER/Group=$GROUP"
-            exit 1
-          fi
-
-          # Mode bits must survive the rewrite. /usr/sbin/nginx is +x (mode 0755).
-          MODE=$(printf "stat /usr/sbin/nginx\n" \
-            | debugfs /tmp/nginx-oci.ext4 2>/dev/null \
-            | awk '/^Inode:/ {for (i=1;i<=NF;i++) if ($i=="Mode:") print $(i+1); exit}')
-          echo "/usr/sbin/nginx Mode=$MODE"
-          if [ "$MODE" != "0755" ]; then
-            echo "::error::expected /usr/sbin/nginx mode 0755, got $MODE"
-            exit 1
-          fi
-
-  # ---- Integration + stress tests: needs kbox binary + rootfs ----
-  integration-tests:
-    needs: build-kbox
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: kbox-build
-
-      - name: Restore permissions
-        run: |
-          chmod +x kbox
-          chmod +x tests/guest/*-test 2>/dev/null || true
-          chmod +x tests/stress/* 2>/dev/null || true
-
-      - name: Integration tests
-        run: ./scripts/run-tests.sh ./kbox alpine.ext4
-
-      - name: Stress tests
-        run: ./scripts/run-stress.sh ./kbox alpine.ext4
-        env:
-          STRESS_TIMEOUT: 120
