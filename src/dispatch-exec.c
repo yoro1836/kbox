@@ -800,6 +800,14 @@ struct kbox_dispatch forward_execve(const struct kbox_syscall_request *req,
     if (rc < 0)
         return kbox_dispatch_errno(-rc);
 
+    /* Android fallback: execv("/proc/self/fd/N") from the child supervisor.
+     * The supervisor already injected the memfd via AT_EMPTY_PATH and only
+     * falls through to /proc/self/fd/N when the kernel rejects the memfd.
+     * Pass through without translation so the host kernel resolves the fd.
+     */
+    if (strncmp(pathbuf, "/proc/self/fd/", 14) == 0)
+        return kbox_dispatch_continue();
+
     /* Translate path for LKL. */
     char translated[KBOX_MAX_PATH];
     rc = kbox_translate_path_for_lkl(pid, pathbuf, ctx->host_root, translated,
