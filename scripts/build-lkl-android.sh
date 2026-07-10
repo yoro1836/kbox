@@ -155,7 +155,11 @@ STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 CC="${CC_WRAPPER}"
 
 # sysroot is passed via CLANG_FLAGS / CFLAGS, not in CC.
-KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu --sysroot=${NDK_SYSROOT}"
+# -fintegrated-as tells clang to use its built-in assembler.
+# Without it, Kconfig's as-version.sh invokes the external assembler
+# (llvm-as from NDK), which does not identify as "GNU assembler"
+# and triggers as-version.sh's "unknown assembler invoked" error.
+KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu --sysroot=${NDK_SYSROOT} -fintegrated-as"
 
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 # The kernel will override LD to ld.lld when it detects clang.
