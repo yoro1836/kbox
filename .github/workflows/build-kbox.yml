@@ -72,6 +72,22 @@ jobs:
           unzip -qo android-ndk-r27-linux.zip
           rm android-ndk-r27-linux.zip
 
+      - name: ccache config
+        run: |
+          echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+
+      - name: Install ccache
+        run: sudo apt-get install -y ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ccache-lkl-${{ runner.os }}-${{ hashFiles('scripts/fetch-lkl.sh', 'scripts/build-lkl-android.sh') }}
+          restore-keys: |
+            ccache-lkl-${{ runner.os }}-
+
       # Restore LKL artifact from cache if available (faster than rebuild)
       - name: Cache LKL artifact
         id: cache-lkl
@@ -88,19 +104,6 @@ jobs:
           ./scripts/build-lkl-android.sh
         env:
           LKL_DIR: lkl-aarch64-android
-
-      - name: ccache config
-        run: |
-          echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> "$GITHUB_ENV"
-          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
-
-      - name: Cache ccache
-        uses: actions/cache@v5
-        with:
-          path: .ccache
-          key: ccache-lkl-${{ runner.os }}-${{ hashFiles('scripts/fetch-lkl.sh', 'scripts/build-lkl-android.sh') }}
-          restore-keys: |
-            ccache-lkl-${{ runner.os }}-
 
       - name: Configure kbox
         run: make defconfig
