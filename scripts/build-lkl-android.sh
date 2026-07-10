@@ -126,32 +126,42 @@ chmod +x "${SYMLINK_DIR}/${NDK_TARGET}-ld"
 
 CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 
+# Create a ccache wrapper.  Using a single-path wrapper (rather than
+# "ccache /path/to/clang" as CC) avoids Kconfig's "command -v \$(CC)"
+# check in scripts/Kconfig.include:39, which fails when CC contains
+# multiple words or flags.
+CCACHE_CMD="${CCACHE:-}"
+CC_WRAPPER="${SYMLINK_DIR}/ccache-${NDK_TARGET}"
+if [ -n "${CCACHE_CMD}" ]; then
+    cat > "${CC_WRAPPER}" << CCEOF
+#!/bin/sh
+exec ccache ${NDK_CC} "\$@"
+CCEOF
+    chmod +x "${CC_WRAPPER}"
+else
+    # No ccache: symlink directly to the NDK compiler.
+    ln -sf "${NDK_CC}" "${CC_WRAPPER}"
+fi
+
 # Static build flags: disable fortification to avoid glibc-specific symbols
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
 STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 
-CCACHE_CMD="${CCACHE:-}"
 
-# CC without --sysroot: Kconfig's Kconfig.include runs "command -v \$(CC)",
-# and --sysroot= looks like a command name to command -v, causing "C compiler
-# not found".  Pass --sysroot via CLANG_FLAGS / CFLAGS instead.
-CC_PLAIN="${NDK_CC}"
+# CC is a single-path wrapper (ccache or direct symlink).
+# scripts/Kconfig.include runs "command -v \$(CC)" which requires
+# a single command path, not "ccache /path/to/clang".
+CC="${CC_WRAPPER}"
 
-# Kernel build: ccache-wrapped CC + sysroot via CLANG_FLAGS
-KERNEL_CC="${CC_PLAIN}"
-if [ -n "${CCACHE_CMD}" ]; then
-    KERNEL_CC="${CCACHE_CMD} ${KERNEL_CC}"
-fi
+# sysroot is passed via CLANG_FLAGS / CFLAGS, not in CC.
 KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu --sysroot=${NDK_SYSROOT}"
 
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 # The kernel will override LD to ld.lld when it detects clang.
 # Set it explicitly to our wrapper (which forces -m aarch64linux).
 make -C "${LKL_SRC}" ARCH=lkl \
-    HOSTCC=gcc \
-    HOSTCXX=g++ \
-    CC="${KERNEL_CC}" \
+    CC="${CC}" \
     LD="${CROSS_PREFIX}ld" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
     CLANG_FLAGS="${KERNEL_CLANG_FLAGS}" \
@@ -159,16 +169,13 @@ make -C "${LKL_SRC}" ARCH=lkl \
     -j"${NPROC}"
 
 echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
-# \$(OUTPUT) = \$(CURDIR)/ in the tools/lkl Makefile, so the
+# $(OUTPUT) = $(CURDIR)/ in the tools/lkl Makefile, so the
 # actual target is an absolute path. Use it explicitly.
 TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
 TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
-TOOLS_CC="${CC_PLAIN}"
-if [ -n "${CCACHE_CMD}" ]; then
-    TOOLS_CC="${CCACHE_CMD} ${TOOLS_CC}"
-fi
+TOOLS_CC="${CC}"
 make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" \
-    CC="${TOOLS_CC}" \
+    CC="${CC}" \
     LD="${CROSS_PREFIX}ld" \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
