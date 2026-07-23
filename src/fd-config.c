@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <sys/resource.h>
 
-#include "kbox/fd-config.h"
 #include "fd-table.h"
+#include "kbox/fd-config.h"
 
 /* Runtime bounds (used for limits, not struct sizes). */
 long kbox_fd_base = KBOX_FD_BASE_MAX;
@@ -20,8 +20,7 @@ void kbox_fd_config_init(void)
     unsigned long table_max;
     unsigned long base;
 
-    if (getrlimit(RLIMIT_NOFILE, &rl) != 0 ||
-        rl.rlim_max == RLIM_INFINITY)
+    if (getrlimit(RLIMIT_NOFILE, &rl) != 0 || rl.rlim_max == RLIM_INFINITY)
         return;
 
     /* set_launch_rlimits() raises the soft limit to the hard limit before

@@ -132,17 +132,14 @@ CROSS_PREFIX="${SYMLINK_DIR}/${NDK_TARGET}-"
 # multiple words or flags.
 CCACHE_CMD="${CCACHE:-}"
 CC_WRAPPER="${SYMLINK_DIR}/ccache-${NDK_TARGET}"
-if [ -n "${CCACHE_CMD}" ]; then
-    cat > "${CC_WRAPPER}" << CCEOF
+cat > "${CC_WRAPPER}" << CCEOF
 #!/bin/sh
-exec ccache ${NDK_CC} "\$@"
-CCEOF
-    chmod +x "${CC_WRAPPER}"
-else
-    # No ccache: symlink directly to the NDK compiler.
-    ln -sf "${NDK_CC}" "${CC_WRAPPER}"
+if [ -n "${CCACHE_CMD}" ]; then
+    exec "${CCACHE_CMD}" "${NDK_CC}" --sysroot="${NDK_SYSROOT}" "\$@"
 fi
-
+exec "${NDK_CC}" --sysroot="${NDK_SYSROOT}" "\$@"
+CCEOF
+chmod +x "${CC_WRAPPER}"
 # Static build flags: disable fortification to avoid glibc-specific symbols
 # (__fprintf_chk, __longjmp_chk, __fdelt_chk, etc.) that Bionic does not provide.
 # Also disable assertions to avoid __assert_fail.
@@ -154,12 +151,11 @@ STATIC_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DNDEBUG"
 # a single command path, not "ccache /path/to/clang".
 CC="${CC_WRAPPER}"
 
-# sysroot is passed via CLANG_FLAGS / CFLAGS, not in CC.
-# -fintegrated-as tells clang to use its built-in assembler.
-# Without it, Kconfig's as-version.sh invokes the external assembler
-# (llvm-as from NDK), which does not identify as "GNU assembler"
-# and triggers as-version.sh's "unknown assembler invoked" error.
-KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu --sysroot=${NDK_SYSROOT} -fintegrated-as"
+# The compiler wrapper supplies --sysroot. -fintegrated-as tells clang to use
+# its built-in assembler. Without it, Kconfig's as-version.sh invokes the
+# external assembler (llvm-as from NDK), which does not identify as "GNU
+# assembler" and triggers its "unknown assembler invoked" error.
+KERNEL_CLANG_FLAGS="--target=aarch64-linux-gnu -fintegrated-as"
 
 echo "  BUILD   ARCH=lkl kernel (Android, -j${NPROC})"
 # The kernel will override LD to ld.lld when it detects clang.
@@ -176,7 +172,7 @@ echo "  BUILD   tools/lkl (Android, static, -j${NPROC})"
 # $(OUTPUT) = $(CURDIR)/ in the tools/lkl Makefile, so the
 # actual target is an absolute path. Use it explicitly.
 TOOLS_LKL_DIR="${LKL_SRC}/tools/lkl"
-TOOLS_LKL_ABS="${PWD}/${TOOLS_LKL_DIR}/liblkl.a"
+TOOLS_LKL_ABS="$(cd "${TOOLS_LKL_DIR}" && pwd)/liblkl.a"
 TOOLS_CC="${CC}"
 make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" V=1 \
     CC="${CC}" \
@@ -184,7 +180,6 @@ make -C "${TOOLS_LKL_DIR}" "${TOOLS_LKL_ABS}" V=1 \
     AR="${NDK_BIN}/llvm-ar" \
     NM="${NDK_BIN}/llvm-nm" \
     CROSS_COMPILE="${CROSS_PREFIX}" \
-    CFLAGS="--sysroot=${NDK_SYSROOT}" \
     LDFLAGS="-static ${STATIC_FLAGS}" \
     CLANG_TARGET_FLAGS="aarch64-linux-gnu" \
     -j"${NPROC}"

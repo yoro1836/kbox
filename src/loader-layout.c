@@ -76,7 +76,7 @@ static int append_plan_mappings(struct kbox_loader_layout *layout,
             if (layout->mapping_count >= KBOX_LOADER_MAX_MAPPINGS)
                 return -1;
             mapping = &layout->mappings[layout->mapping_count++];
-            *mapping = (struct kbox_loader_mapping) {
+            *mapping = (struct kbox_loader_mapping){
                 .addr = biased_addr,
                 .size = seg->map_size,
                 .file_offset = 0,
@@ -112,7 +112,7 @@ static int append_plan_mappings(struct kbox_loader_layout *layout,
             if (layout->mapping_count >= KBOX_LOADER_MAX_MAPPINGS)
                 return -1;
             mapping = &layout->mappings[layout->mapping_count++];
-            *mapping = (struct kbox_loader_mapping) {
+            *mapping = (struct kbox_loader_mapping){
                 .addr = biased_addr,
                 .size = file_map_end - seg->map_start,
                 .file_offset = seg->map_offset,
@@ -132,7 +132,7 @@ static int append_plan_mappings(struct kbox_loader_layout *layout,
                 if (layout->mapping_count >= KBOX_LOADER_MAX_MAPPINGS)
                     return -1;
                 mapping = &layout->mappings[layout->mapping_count++];
-                *mapping = (struct kbox_loader_mapping) {
+                *mapping = (struct kbox_loader_mapping){
                     .addr = biased_bss,
                     .size = bss_map_end - file_map_end,
                     .file_offset = 0,
@@ -246,7 +246,7 @@ int kbox_loader_build_layout(const struct kbox_loader_layout_spec *spec,
         kbox_loader_layout_reset(layout);
         return -1;
     }
-    layout->mappings[layout->mapping_count++] = (struct kbox_loader_mapping) {
+    layout->mappings[layout->mapping_count++] = (struct kbox_loader_mapping){
         .addr = layout->stack_top - layout->stack_size,
         .size = layout->stack_size,
         .file_offset = 0,

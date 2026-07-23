@@ -15,9 +15,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <sys/stat.h>
 
 #include "dispatch-internal.h"
 #include "kbox/elf.h"

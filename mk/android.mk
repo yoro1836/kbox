@@ -23,7 +23,7 @@ CXX     := $(NDK_TOOLCHAIN)/bin/$(NDK_TARGET)-clang++
 AR      := $(NDK_TOOLCHAIN)/bin/llvm-ar
 STRIP   := $(NDK_TOOLCHAIN)/bin/llvm-strip
 IS_ANDROID := 1
-CFLAGS     += -DANDROID -D__ANDROID_API__=$(ANDROID_API) -DNDEBUG
+CFLAGS     += -DANDROID -DNDEBUG
 # Fully static linking: no dynamic dependencies at runtime.
 # This also resolves glibc symbols at build time via NDK static libs.
 LDFLAGS    += -static

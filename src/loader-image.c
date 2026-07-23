@@ -73,7 +73,7 @@ static int record_region(struct kbox_loader_image *image,
 {
     if (!image || image->region_count >= KBOX_LOADER_MAX_MAPPINGS)
         return -1;
-    image->regions[image->region_count++] = (struct kbox_loader_image_region) {
+    image->regions[image->region_count++] = (struct kbox_loader_image_region){
         .addr = addr,
         .size = size,
     };

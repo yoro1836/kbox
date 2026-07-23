@@ -622,16 +622,18 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
 
             if (exec_memfd >= 0) {
 #ifdef __ANDROID__
-                /* Bionic lacks fexecve(); use AT_EMPTY_PATH execveat first, then
-                 * fall back to execv(/proc/self/fd/N) on kernels where memfd
-                 * exec permission is denied (e.g. Android 6.1 kernel without MFD_EXEC).
+                /* Bionic lacks fexecve(); use AT_EMPTY_PATH execveat first,
+                 * then fall back to execv(/proc/self/fd/N) on kernels where
+                 * memfd exec permission is denied (e.g. Android 6.1 kernel
+                 * without MFD_EXEC).
                  */
-                long ret = syscall(__NR_execveat, exec_memfd, "",
-                                  (char *const *) argv, environ, AT_EMPTY_PATH);
+                long ret =
+                    syscall(__NR_execveat, exec_memfd, "", (char *const *) argv,
+                            environ, AT_EMPTY_PATH);
                 if (ret < 0) {
                     char fdpath[64];
-                    snprintf(fdpath, sizeof(fdpath),
-                             "/proc/self/fd/%d", exec_memfd);
+                    snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d",
+                             exec_memfd);
                     execv(fdpath, (char *const *) argv);
                 }
 #else
@@ -656,7 +658,7 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
                 (void) syscall(__NR_exit_group, 127);
                 __builtin_unreachable();
             }
-    }
+        }
     }
 
     /* Parent process. */
