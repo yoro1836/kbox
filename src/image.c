@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include "fd-table.h"
+#include "guest-env.h"
 #include "kbox/compiler.h"
 #include "kbox/elf.h"
 #include "kbox/identity.h"
@@ -82,7 +83,6 @@ static const char *join_mount_opts(const struct kbox_image_args *a,
     return buf;
 }
 
-extern char **environ;
 
 /* AUTO fast-path selection.
  *
@@ -398,16 +398,6 @@ static void maybe_log_phase1_path_candidates(
     }
 }
 
-static size_t count_envp(char *const *envp)
-{
-    size_t n = 0;
-
-    if (!envp)
-        return 0;
-    while (envp[n])
-        n++;
-    return n;
-}
 
 static const char **build_loader_argv(const char *command,
                                       const char *const *extra_args,
@@ -469,6 +459,7 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
 {
     unsigned char launch_random[KBOX_LOADER_RANDOM_SIZE];
     struct kbox_loader_launch_spec spec;
+    struct kbox_guest_env guest_env;
     const char **argv = NULL;
     size_t argc = (size_t) args->extra_argc + 1;
     uint32_t uid = (uint32_t) (args->root_id || args->system_root
@@ -494,16 +485,18 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     }
 
     argv = build_loader_argv(command, args->extra_args, args->extra_argc);
-    if (!argv)
+    if (!argv || kbox_guest_env_init(&guest_env, args->syscall_mode) < 0) {
+        free(argv);
         return -1;
+    }
 
     memset(&spec, 0, sizeof(spec));
     spec.exec_fd = exec_memfd;
     spec.interp_fd = interp_memfd;
     spec.argv = argv;
     spec.argc = argc;
-    spec.envp = (const char *const *) environ;
-    spec.envc = count_envp(environ);
+    spec.envp = guest_env.entries;
+    spec.envc = guest_env.count;
     spec.execfn = command;
     spec.random_bytes = launch_random;
     spec.page_size = (uint64_t) sysconf(_SC_PAGESIZE);
@@ -907,7 +900,6 @@ int kbox_run_image(const struct kbox_image_args *args)
     command = args->command ? args->command : "/bin/sh";
     probe_mode = args->syscall_mode;
     rewrite_requested = args->syscall_mode == KBOX_SYSCALL_MODE_REWRITE;
-    setenv("KBOX_SYSCALL_MODE", kbox_syscall_mode_name(args->syscall_mode), 1);
 
     /* AUTO enables rewrite analysis for non-shell commands so the
      * auto_prefers_userspace_fast_path() selection function can see the

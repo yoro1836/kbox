@@ -16,6 +16,7 @@ SRCS     = $(SRC_DIR)/main.c \
            $(SRC_DIR)/syscall-trap.c \
            $(SRC_DIR)/path.c \
            $(SRC_DIR)/identity.c \
+           $(SRC_DIR)/guest-env.c \
            $(SRC_DIR)/elf.c \
            $(SRC_DIR)/loader-entry.c \
            $(SRC_DIR)/loader-handoff.c \

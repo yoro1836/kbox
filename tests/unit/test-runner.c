@@ -94,6 +94,7 @@ extern void test_path_init(void);
 extern void test_mount_init(void);
 extern void test_cli_init(void);
 extern void test_identity_init(void);
+extern void test_guest_env_init(void);
 extern void test_syscall_nr_init(void);
 extern void test_elf_init(void);
 extern void test_x86_decode_init(void);
@@ -124,6 +125,7 @@ int main(int argc, char *argv[])
     test_mount_init();
     test_cli_init();
     test_identity_init();
+    test_guest_env_init();
     test_syscall_nr_init();
     test_elf_init();
     test_x86_decode_init();
