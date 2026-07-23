@@ -45,8 +45,8 @@ __attribute__((noreturn)) __attribute__((no_stack_protector))
 #if KBOX_HAS_ASAN
 __attribute__((no_sanitize("address")))
 #endif
-__attribute__((no_sanitize("undefined"))) void kbox_loader_transfer_to_guest(
-    const struct kbox_loader_transfer_state *state)
+__attribute__((no_sanitize("undefined"))) void
+kbox_loader_transfer_to_guest(const struct kbox_loader_transfer_state *state)
 {
     if (!state)
         __builtin_trap();

@@ -162,7 +162,7 @@ int kbox_loader_build_initial_stack(const struct kbox_loader_stack_spec *spec,
     if (place_blob(buf, stack_base, &cursor,
                    spec->random_bytes
                        ? spec->random_bytes
-                       : (const unsigned char[KBOX_LOADER_RANDOM_SIZE]){0},
+                       : (const unsigned char[KBOX_LOADER_RANDOM_SIZE]) {0},
                    KBOX_LOADER_RANDOM_SIZE, &image->random_addr) < 0)
         goto fail;
 
@@ -189,30 +189,30 @@ int kbox_loader_build_initial_stack(const struct kbox_loader_stack_spec *spec,
         if (__builtin_add_overflow(spec->main_load_bias,
                                    spec->main_plan->phdr_vaddr, &phdr_addr))
             goto fail;
-        auxv[auxi++] = (struct kbox_loader_auxv_entry){
+        auxv[auxi++] = (struct kbox_loader_auxv_entry) {
             .key = AT_PHDR,
             .value = phdr_addr,
         };
     }
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_PHENT,
         .value = spec->main_plan->phentsize,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_PHNUM,
         .value = spec->main_plan->phnum,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_PAGESZ,
         .value = spec->page_size,
     };
     if (spec->interp_plan) {
-        auxv[auxi++] = (struct kbox_loader_auxv_entry){
+        auxv[auxi++] = (struct kbox_loader_auxv_entry) {
             .key = AT_BASE,
             .value = spec->interp_load_bias,
         };
     }
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_FLAGS,
         .value = 0,
     };
@@ -222,36 +222,36 @@ int kbox_loader_build_initial_stack(const struct kbox_loader_stack_spec *spec,
         if (__builtin_add_overflow(spec->main_load_bias, spec->main_plan->entry,
                                    &entry_addr))
             goto fail;
-        auxv[auxi++] = (struct kbox_loader_auxv_entry){
+        auxv[auxi++] = (struct kbox_loader_auxv_entry) {
             .key = AT_ENTRY,
             .value = entry_addr,
         };
     }
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_UID,
         .value = spec->uid,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_EUID,
         .value = spec->euid,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_GID,
         .value = spec->gid,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_EGID,
         .value = spec->egid,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_SECURE,
         .value = spec->secure ? 1u : 0u,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_RANDOM,
         .value = image->random_addr,
     };
-    auxv[auxi++] = (struct kbox_loader_auxv_entry){
+    auxv[auxi++] = (struct kbox_loader_auxv_entry) {
         .key = AT_EXECFN,
         .value = image->execfn_addr,
     };

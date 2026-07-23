@@ -1701,7 +1701,8 @@ __attribute__((no_stack_protector))
 #if KBOX_HAS_ASAN
 __attribute__((no_sanitize("address")))
 #endif
-static void trap_sigsys_handler(int signo, siginfo_t *info, void *ucontext_ptr)
+static void
+trap_sigsys_handler(int signo, siginfo_t *info, void *ucontext_ptr)
 {
     struct kbox_syscall_trap_runtime *runtime = load_active_trap_runtime();
 

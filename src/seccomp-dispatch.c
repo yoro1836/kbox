@@ -479,7 +479,7 @@ void kbox_lkl_stat_to_host(const struct kbox_lkl_stat *src, struct stat *dst)
 
 struct kbox_dispatch kbox_dispatch_continue(void)
 {
-    return (struct kbox_dispatch){
+    return (struct kbox_dispatch) {
         .kind = KBOX_DISPATCH_CONTINUE,
         .val = 0,
         .error = 0,
@@ -490,7 +490,7 @@ struct kbox_dispatch kbox_dispatch_errno(int err)
 {
     if (err <= 0)
         err = EIO;
-    return (struct kbox_dispatch){
+    return (struct kbox_dispatch) {
         .kind = KBOX_DISPATCH_RETURN,
         .val = 0,
         .error = err,
@@ -499,7 +499,7 @@ struct kbox_dispatch kbox_dispatch_errno(int err)
 
 struct kbox_dispatch kbox_dispatch_value(int64_t val)
 {
-    return (struct kbox_dispatch){
+    return (struct kbox_dispatch) {
         .kind = KBOX_DISPATCH_RETURN,
         .val = val,
         .error = 0,
@@ -4602,12 +4602,12 @@ struct kbox_dispatch kbox_dispatch_request(
     if (h->alarm >= 0 && nr == h->alarm)
         return kbox_dispatch_continue();
 
-        /* Signal delivery: PID validation + virtual-to-real translation.
-         *
-         * kill/tgkill/tkill share PID validation (guest process tree only),
-         * virtual PID 1 -> real PID translation, and trap-mode pending signal
-         * bookkeeping. The helper below covers the common tail.
-         */
+    /* Signal delivery: PID validation + virtual-to-real translation.
+     *
+     * kill/tgkill/tkill share PID validation (guest process tree only),
+     * virtual PID 1 -> real PID translation, and trap-mode pending signal
+     * bookkeeping. The helper below covers the common tail.
+     */
 
 #define IS_GUEST_PID(p) \
     ((p) == ctx->child_pid || (p) == kbox_syscall_request_pid(req) || (p) == 1)
