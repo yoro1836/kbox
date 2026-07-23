@@ -3196,7 +3196,7 @@ static struct kbox_dispatch forward_fstat(
     if (remote_stat == 0)
         return kbox_dispatch_errno(EFAULT);
 
-        /* Check the stat cache first to avoid an LKL round-trip. */
+    /* Check the stat cache first to avoid an LKL round-trip. */
 #if KBOX_STAT_CACHE_ENABLED
     for (int ci = 0; ci < KBOX_STAT_CACHE_MAX; ci++) {
         if (ctx->stat_cache[ci].lkl_fd == lkl_fd) {
