@@ -4,22 +4,22 @@
 
 #include <stddef.h>
 
-#include "kbox/cli.h"
-
-/* Minimal, host-independent environment for the initial guest process. */
-#define KBOX_GUEST_ENV_MAX 5
+/* Environment from the guest rootfs's /etc/environment. */
+#define KBOX_GUEST_ENV_MAX 64
+#define KBOX_GUEST_ENV_VALUE_MAX 256
 
 struct kbox_guest_env {
-    const char *entries[KBOX_GUEST_ENV_MAX];
+    char values[KBOX_GUEST_ENV_MAX][KBOX_GUEST_ENV_VALUE_MAX];
+    const char *entries[KBOX_GUEST_ENV_MAX + 1];
     size_t count;
 };
 
-/*
- * Initialize the environment passed to the first guest exec. Host variables
- * such as Android/Termux PATH, PREFIX, and LD_LIBRARY_PATH are intentionally
- * never inherited.
- */
-int kbox_guest_env_init(struct kbox_guest_env *env,
-                        enum kbox_syscall_mode syscall_mode);
+/* Reset to an empty environment. */
+void kbox_guest_env_reset(struct kbox_guest_env *env);
+
+/* Parse NAME=VALUE records from an /etc/environment file. */
+int kbox_guest_env_parse(struct kbox_guest_env *env,
+                         const char *contents,
+                         size_t contents_len);
 
 #endif /* KBOX_GUEST_ENV_H */

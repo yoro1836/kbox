@@ -3,44 +3,57 @@
 #include "guest-env.h"
 #include "test-runner.h"
 
-static void test_guest_env_is_minimal_and_host_independent(void)
+static void test_guest_env_parses_rootfs_environment(void)
 {
+    static const char contents[] =
+        "# guest defaults\n"
+        "PATH=/usr/local/bin:/usr/bin\n"
+        "HOME = ignored\n"
+        "LANG=ko_KR.UTF-8\n"
+        "PAGER=\"less -FRX\"\n";
     struct kbox_guest_env env;
 
-    ASSERT_EQ(kbox_guest_env_init(&env, KBOX_SYSCALL_MODE_AUTO), 0);
-    ASSERT_EQ(env.count, 4);
-    ASSERT_STREQ(env.entries[0], "HOME=/root");
-    ASSERT_STREQ(
-        env.entries[1],
-        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
-    ASSERT_STREQ(env.entries[2], "TERM=xterm-256color");
-    ASSERT_STREQ(env.entries[3], "KBOX_SYSCALL_MODE=auto");
-    ASSERT_TRUE(env.entries[4] == NULL);
+    ASSERT_EQ(kbox_guest_env_parse(&env, contents, sizeof(contents) - 1), 0);
+    ASSERT_EQ(env.count, 3);
+    ASSERT_STREQ(env.entries[0], "PATH=/usr/local/bin:/usr/bin");
+    ASSERT_STREQ(env.entries[1], "LANG=ko_KR.UTF-8");
+    ASSERT_STREQ(env.entries[2], "PAGER=less -FRX");
+    ASSERT_TRUE(env.entries[3] == NULL);
 }
 
-static void test_guest_env_sets_each_syscall_mode(void)
+static void test_guest_env_uses_last_duplicate_value(void)
 {
+    static const char contents[] = "PATH=/bin\nPATH=/usr/bin\n";
     struct kbox_guest_env env;
 
-    ASSERT_EQ(kbox_guest_env_init(&env, KBOX_SYSCALL_MODE_SECCOMP), 0);
-    ASSERT_STREQ(env.entries[3], "KBOX_SYSCALL_MODE=seccomp");
-    ASSERT_EQ(kbox_guest_env_init(&env, KBOX_SYSCALL_MODE_TRAP), 0);
-    ASSERT_STREQ(env.entries[3], "KBOX_SYSCALL_MODE=trap");
-    ASSERT_EQ(kbox_guest_env_init(&env, KBOX_SYSCALL_MODE_REWRITE), 0);
-    ASSERT_STREQ(env.entries[3], "KBOX_SYSCALL_MODE=rewrite");
+    ASSERT_EQ(kbox_guest_env_parse(&env, contents, sizeof(contents) - 1), 0);
+    ASSERT_EQ(env.count, 1);
+    ASSERT_STREQ(env.entries[0], "PATH=/usr/bin");
 }
 
-static void test_guest_env_rejects_invalid_mode(void)
+static void test_guest_env_is_empty_without_rootfs_file(void)
 {
     struct kbox_guest_env env;
 
-    ASSERT_EQ(kbox_guest_env_init(&env, (enum kbox_syscall_mode) - 1), -1);
-    ASSERT_EQ(kbox_guest_env_init(NULL, KBOX_SYSCALL_MODE_AUTO), -1);
+    ASSERT_EQ(kbox_guest_env_parse(&env, NULL, 0), 0);
+    ASSERT_EQ(env.count, 0);
+    ASSERT_TRUE(env.entries[0] == NULL);
+}
+
+static void test_guest_env_rejects_oversized_value(void)
+{
+    char contents[KBOX_GUEST_ENV_VALUE_MAX + 16];
+    struct kbox_guest_env env;
+
+    memset(contents, 'a', sizeof(contents));
+    memcpy(contents, "LONG=", 5);
+    ASSERT_EQ(kbox_guest_env_parse(&env, contents, sizeof(contents)), -1);
 }
 
 void test_guest_env_init(void)
 {
-    TEST_REGISTER(test_guest_env_is_minimal_and_host_independent);
-    TEST_REGISTER(test_guest_env_sets_each_syscall_mode);
-    TEST_REGISTER(test_guest_env_rejects_invalid_mode);
+    TEST_REGISTER(test_guest_env_parses_rootfs_environment);
+    TEST_REGISTER(test_guest_env_uses_last_duplicate_value);
+    TEST_REGISTER(test_guest_env_is_empty_without_rootfs_file);
+    TEST_REGISTER(test_guest_env_rejects_oversized_value);
 }

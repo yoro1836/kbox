@@ -413,6 +413,54 @@ static const char **build_loader_argv(const char *command,
         argv[i + 1] = extra_args[i];
     return argv;
 }
+#define KBOX_GUEST_ENV_FILE_MAX (16 * 1024)
+
+static int load_rootfs_environment(const struct kbox_sysnrs *sysnrs,
+                                   struct kbox_guest_env *env)
+{
+    char contents[KBOX_GUEST_ENV_FILE_MAX];
+    long lkl_fd;
+    int env_fd;
+    size_t used = 0;
+
+    if (!sysnrs || !env)
+        return -1;
+    lkl_fd = kbox_lkl_openat(sysnrs, AT_FDCWD_LINUX, "/etc/environment",
+                             O_RDONLY, 0);
+    if (lkl_fd == -ENOENT)
+        return kbox_guest_env_parse(env, NULL, 0);
+    if (lkl_fd < 0) {
+        fprintf(stderr, "kbox: cannot open /etc/environment: %s\n",
+                kbox_err_text(lkl_fd));
+        return -1;
+    }
+    env_fd = kbox_shadow_create(sysnrs, lkl_fd);
+    kbox_lkl_close(sysnrs, lkl_fd);
+    if (env_fd < 0) {
+        fprintf(stderr, "kbox: cannot copy /etc/environment: %s\n",
+                strerror(-env_fd));
+        return -1;
+    }
+    while (used < sizeof(contents)) {
+        ssize_t n = read(env_fd, contents + used, sizeof(contents) - used);
+
+        if (n < 0) {
+            close(env_fd);
+            return -1;
+        }
+        if (n == 0)
+            break;
+        used += (size_t) n;
+    }
+    close(env_fd);
+    if (used == sizeof(contents)) {
+        fprintf(stderr, "kbox: /etc/environment exceeds %zu bytes\n",
+                sizeof(contents));
+        return -1;
+    }
+    return kbox_guest_env_parse(env, contents, used);
+}
+
 
 static uint64_t probe_map_addr(uint64_t preferred, size_t size)
 {
@@ -449,7 +497,8 @@ static uint64_t probe_map_addr(uint64_t preferred, size_t size)
     return 0;
 }
 
-static int prepare_userspace_launch(const struct kbox_image_args *args,
+static int prepare_userspace_launch(const struct kbox_sysnrs *sysnrs,
+                                    const struct kbox_image_args *args,
                                     const char *command,
                                     int exec_memfd,
                                     int interp_memfd,
@@ -485,7 +534,7 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     }
 
     argv = build_loader_argv(command, args->extra_args, args->extra_argc);
-    if (!argv || kbox_guest_env_init(&guest_env, args->syscall_mode) < 0) {
+    if (!argv || load_rootfs_environment(sysnrs, &guest_env) < 0) {
         free(argv);
         return -1;
     }
@@ -1441,9 +1490,9 @@ int kbox_run_image(const struct kbox_image_args *args)
                 maybe_apply_virtual_procinfo_fast_path(
                     interp_memfd, "PT_INTERP", args->verbose);
 
-                prep_ok = prepare_userspace_launch(args, command, exec_memfd,
-                                                   interp_memfd, override_uid,
-                                                   override_gid, &launch) == 0;
+                prep_ok = prepare_userspace_launch(
+                              sysnrs, args, command, exec_memfd, interp_memfd,
+                              override_uid, override_gid, &launch) == 0;
                 if (!prep_ok) {
                     if (args->syscall_mode == KBOX_SYSCALL_MODE_TRAP) {
                         fprintf(stderr,
@@ -1549,9 +1598,10 @@ int kbox_run_image(const struct kbox_image_args *args)
                                                        args->verbose);
                 maybe_apply_virtual_procinfo_fast_path(
                     interp_memfd, "PT_INTERP", args->verbose);
-                int prep_ok = prepare_userspace_launch(
-                                  args, command, exec_memfd, interp_memfd,
-                                  override_uid, override_gid, &launch) == 0;
+                int prep_ok =
+                    prepare_userspace_launch(sysnrs, args, command, exec_memfd,
+                                             interp_memfd, override_uid,
+                                             override_gid, &launch) == 0;
 
                 if (!prep_ok) {
                     fprintf(stderr,
@@ -1605,7 +1655,7 @@ int kbox_run_image(const struct kbox_image_args *args)
              * Materialize the ELF in userspace before fork; the child inherits
              * the mappings and transfers into them with USER_NOTIF active.
              */
-            if (prepare_userspace_launch(args, command, exec_memfd,
+            if (prepare_userspace_launch(sysnrs, args, command, exec_memfd,
                                          interp_memfd, override_uid,
                                          override_gid, &launch) < 0) {
                 fprintf(stderr,
