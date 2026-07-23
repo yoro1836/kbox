@@ -3196,7 +3196,7 @@ static struct kbox_dispatch forward_fstat(
     if (remote_stat == 0)
         return kbox_dispatch_errno(EFAULT);
 
-    /* Check the stat cache first to avoid an LKL round-trip. */
+        /* Check the stat cache first to avoid an LKL round-trip. */
 #if KBOX_STAT_CACHE_ENABLED
     for (int ci = 0; ci < KBOX_STAT_CACHE_MAX; ci++) {
         if (ctx->stat_cache[ci].lkl_fd == lkl_fd) {
@@ -4602,12 +4602,12 @@ struct kbox_dispatch kbox_dispatch_request(
     if (h->alarm >= 0 && nr == h->alarm)
         return kbox_dispatch_continue();
 
-    /* Signal delivery: PID validation + virtual-to-real translation.
-     *
-     * kill/tgkill/tkill share PID validation (guest process tree only), virtual
-     * PID 1 -> real PID translation, and trap-mode pending signal bookkeeping.
-     * The helper below covers the common tail.
-     */
+        /* Signal delivery: PID validation + virtual-to-real translation.
+         *
+         * kill/tgkill/tkill share PID validation (guest process tree only),
+         * virtual PID 1 -> real PID translation, and trap-mode pending signal
+         * bookkeeping. The helper below covers the common tail.
+         */
 
 #define IS_GUEST_PID(p) \
     ((p) == ctx->child_pid || (p) == kbox_syscall_request_pid(req) || (p) == 1)
