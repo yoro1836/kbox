@@ -764,6 +764,7 @@ extern int64_t kbox_syscall_trap_host_rt_sigprocmask_unblock(
     size_t sigset_size);
 #endif
 
+
 static int direct_trap_execute(struct kbox_syscall_trap_runtime *runtime,
                                const struct kbox_syscall_request *req,
                                struct kbox_dispatch *out)
@@ -1307,6 +1308,7 @@ int kbox_syscall_trap_runtime_take_dispatch(
     return 0;
 }
 
+
 int kbox_syscall_trap_active_dispatch(const struct kbox_syscall_request *req,
                                       struct kbox_dispatch *out)
 {
@@ -1640,6 +1642,7 @@ static int64_t host_syscall(const ucontext_t *uc)
     return -ENOSYS;
 #endif
 }
+
 
 int kbox_syscall_result_to_sigsys(void *ucontext_ptr,
                                   const struct kbox_dispatch *dispatch)

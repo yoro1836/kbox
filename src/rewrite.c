@@ -2711,6 +2711,7 @@ static int encode_aarch64_b_to_veneer(uint64_t site_vaddr,
     return 0;
 }
 
+
 static int64_t rewrite_dispatch_result(struct kbox_rewrite_runtime *runtime,
                                        struct kbox_dispatch *dispatch,
                                        uint64_t nr,
@@ -4141,8 +4142,12 @@ static int make_exec_mappings_writable(const struct kbox_loader_launch *launch,
         prot_out[i] = mapping->prot;
         if ((mapping->prot & PROT_EXEC) == 0 || mapping->size == 0)
             continue;
+        /* Never request W+X. Android enforces W^X and rejects that transition;
+         * temporarily remove execute permission while patching, then restore
+         * the original protection after the instruction cache is flushed.
+         */
         if (mprotect((void *) (uintptr_t) mapping->addr, (size_t) mapping->size,
-                     mapping->prot | PROT_WRITE) != 0) {
+                     (mapping->prot | PROT_WRITE) & ~PROT_EXEC) != 0) {
             return -1;
         }
     }

@@ -29,7 +29,8 @@ TEST_SRCS += $(TEST_DIR)/test-rewrite.c \
 endif
 
 # Unit tests link only the pure-computation sources (no LKL)
-TEST_SUPPORT_SRCS = $(SRC_DIR)/fd-table.c \
+TEST_SUPPORT_SRCS = $(SRC_DIR)/fd-config.c \
+                    $(SRC_DIR)/fd-table.c \
                     $(SRC_DIR)/path.c \
                     $(SRC_DIR)/mount.c \
                     $(TEST_DIR)/test-mount-stubs.c \

@@ -258,6 +258,31 @@ static void test_fd_table_find_by_host_fd_requires_api(void)
     ASSERT_EQ(kbox_fd_table_find_by_host_fd(&t, 123), -1);
 }
 
+static void test_fd_table_runtime_bounds(void)
+{
+    struct kbox_fd_table t;
+    long old_base = kbox_fd_base;
+    long old_table_max = kbox_fd_table_max;
+    long vfd;
+    long boundary;
+    long boundary_lkl;
+
+    /* Android's 32768-FD limit leaves room for a 4096-entry guest range
+     * when the virtual base is moved down to 28672.
+     */
+    kbox_fd_base = 28672;
+    kbox_fd_table_max = 4096;
+    kbox_fd_table_init(&t);
+    vfd = kbox_fd_table_insert(&t, 42, 0);
+    boundary = kbox_fd_base + kbox_fd_table_max;
+    boundary_lkl = kbox_fd_table_get_lkl(&t, boundary);
+    kbox_fd_base = old_base;
+    kbox_fd_table_max = old_table_max;
+
+    ASSERT_EQ(vfd, 28672);
+    ASSERT_EQ(boundary_lkl, -1);
+}
+
 void test_fd_table_init(void)
 {
     TEST_REGISTER(test_fd_table_init_zeros);
@@ -279,4 +304,5 @@ void test_fd_table_init(void)
     TEST_REGISTER(test_fd_table_remove_resets_host_fd);
     TEST_REGISTER(test_fd_table_find_by_host_fd_duplicate_holder_survives);
     TEST_REGISTER(test_fd_table_find_by_host_fd_requires_api);
+    TEST_REGISTER(test_fd_table_runtime_bounds);
 }

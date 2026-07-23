@@ -9,6 +9,7 @@ SRCS     = $(SRC_DIR)/main.c \
            $(SRC_DIR)/cli.c \
            $(SRC_DIR)/syscall-nr.c \
            $(SRC_DIR)/lkl-wrap.c \
+           $(SRC_DIR)/fd-config.c \
            $(SRC_DIR)/fd-table.c \
            $(SRC_DIR)/procmem.c \
            $(SRC_DIR)/syscall-request.c \

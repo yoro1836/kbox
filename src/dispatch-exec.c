@@ -17,6 +17,7 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "dispatch-internal.h"
 #include "kbox/elf.h"
@@ -38,6 +39,12 @@
  * prepare_userspace_launch. The loader places main and interpreter ELFs at
  * these fixed virtual addresses, and the stack just below stack_top.
  */
+#ifdef __ANDROID__
+#define KBOX_EXEC_MAIN_LOAD_BIAS 0x4000000000ULL
+#define KBOX_EXEC_INTERP_LOAD_BIAS 0x5000000000ULL
+#define KBOX_EXEC_STACK_TOP 0x7000010000ULL
+#define KBOX_EXEC_REEXEC_STACK_TOP 0x6f00010000ULL
+#else
 #define KBOX_EXEC_MAIN_LOAD_BIAS 0x600000000000ULL
 #define KBOX_EXEC_INTERP_LOAD_BIAS 0x610000000000ULL
 #define KBOX_EXEC_STACK_TOP 0x700000010000ULL
@@ -49,6 +56,7 @@
  * teardown_old_guest_mappings during the NEXT re-exec.
  */
 #define KBOX_EXEC_REEXEC_STACK_TOP 0x6F0000010000ULL
+#endif
 
 /* Maximum entries in argv or envp for userspace exec. */
 #define KBOX_EXEC_MAX_ARGS 4096
@@ -59,6 +67,99 @@
  * during re-exec.
  */
 static uint64_t reexec_current_stack_top;
+
+#ifdef __ANDROID__
+/* Android denies executable mappings from memfd-backed files under SELinux.
+ * Copy an extracted guest ELF to a filesystem inode carrying the caller's
+ * executable-data label. The file is unlinked immediately; injected FDs keep
+ * the inode alive through exec.
+ */
+static int android_materialize_exec_file(int source_fd)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    const char *dirs[] = {tmpdir, "/data/local/tmp", ".", NULL};
+    unsigned char buffer[16 * 1024];
+    int saved_errno = EACCES;
+
+    if (source_fd < 0)
+        return -EBADF;
+
+    for (size_t i = 0; dirs[i]; i++) {
+        char path[KBOX_MAX_PATH];
+        int fd;
+        off_t offset = 0;
+
+        if (!dirs[i] || dirs[i][0] == '\0')
+            continue;
+        if (snprintf(path, sizeof(path), "%s/.kbox-exec-XXXXXX", dirs[i]) >=
+            (int) sizeof(path)) {
+            saved_errno = ENAMETOOLONG;
+            continue;
+        }
+
+        fd = mkstemp(path);
+        if (fd < 0) {
+            saved_errno = errno;
+            continue;
+        }
+        (void) unlink(path);
+        if (fchmod(fd, 0700) != 0) {
+            saved_errno = errno;
+            close(fd);
+            continue;
+        }
+
+        for (;;) {
+            ssize_t count = pread(source_fd, buffer, sizeof(buffer), offset);
+            if (count < 0) {
+                if (errno == EINTR)
+                    continue;
+                saved_errno = errno;
+                close(fd);
+                fd = -1;
+                break;
+            }
+            if (count == 0)
+                break;
+
+            ssize_t written = 0;
+            while (written < count) {
+                ssize_t result =
+                    write(fd, buffer + written, (size_t) (count - written));
+                if (result < 0) {
+                    if (errno == EINTR)
+                        continue;
+                    saved_errno = errno;
+                    close(fd);
+                    fd = -1;
+                    break;
+                }
+                written += result;
+            }
+            if (fd < 0)
+                break;
+            offset += count;
+        }
+
+        if (fd >= 0) {
+            char fd_path[64];
+            int read_fd;
+
+            snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd);
+            read_fd = open(fd_path, O_RDONLY | O_CLOEXEC);
+            if (read_fd < 0) {
+                saved_errno = errno;
+                close(fd);
+                continue;
+            }
+            close(fd);
+            return read_fd;
+        }
+    }
+
+    return -saved_errno;
+}
+#endif
 
 /* mmap dispatch: if the FD is a virtual FD with no host shadow, create the
  * shadow on demand (lazy shadow) and inject it into the tracee at the same FD
@@ -887,6 +988,18 @@ struct kbox_dispatch forward_execve(const struct kbox_syscall_request *req,
                     close(exec_memfd);
                     return kbox_dispatch_errno(-interp_memfd);
                 }
+#ifdef __ANDROID__
+                {
+                    int regular_fd =
+                        android_materialize_exec_file(interp_memfd);
+                    close(interp_memfd);
+                    if (regular_fd < 0) {
+                        close(exec_memfd);
+                        return kbox_dispatch_errno(-regular_fd);
+                    }
+                    interp_memfd = regular_fd;
+                }
+#endif
 
                 /* Inject the interpreter memfd first so we know its FD number
                  * in the tracee for the PT_INTERP patch. O_CLOEXEC is safe: the
@@ -937,6 +1050,15 @@ struct kbox_dispatch forward_execve(const struct kbox_syscall_request *req,
             munmap(elf_buf, elf_buf_len);
         }
     }
+#ifdef __ANDROID__
+    {
+        int regular_fd = android_materialize_exec_file(exec_memfd);
+        close(exec_memfd);
+        if (regular_fd < 0)
+            return kbox_dispatch_errno(-regular_fd);
+        exec_memfd = regular_fd;
+    }
+#endif
 
     /* Inject the exec memfd into the tracee. O_CLOEXEC keeps the tracee's FD
      * table clean after exec succeeds.

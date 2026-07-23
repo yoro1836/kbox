@@ -26,6 +26,7 @@
 #include <unistd.h>
 
 #include "fd-table.h"
+#include "loader-transfer.h"
 #include "seccomp.h"
 #include "syscall-nr.h"
 #ifdef KBOX_HAS_WEB
@@ -89,7 +90,16 @@ static int send_fd(int sock, int fd)
     {
         ssize_t sret;
         do {
+#ifdef __ANDROID__
+            /* Bionic's sendmsg wrapper is caught by the just-installed
+             * listener on Android despite sendmsg being allow-listed. Issue
+             * the known host syscall number directly to avoid deadlocking the
+             * listener-FD handshake before the parent can supervise it.
+             */
+            sret = syscall(__NR_sendmsg, sock, &msg, 0);
+#else
             sret = sendmsg(sock, &msg, 0);
+#endif
         } while (sret < 0 && errno == EINTR);
         if (sret < 0) {
             fprintf(stderr, "sendmsg(SCM_RIGHTS): %s\n", strerror(errno));
@@ -466,6 +476,7 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
                         int nargs,
                         const char *host_root,
                         int exec_memfd,
+                        const struct kbox_loader_transfer_state *transfer,
                         int verbose,
                         int root_identity,
                         int normalize,
@@ -580,6 +591,13 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
             fprintf(stderr, "sigprocmask(SIG_SETMASK): %s\n", strerror(errno));
             _exit(127);
         }
+        /* Android cannot exec the extracted guest memfd under SELinux. When
+         * the caller prepared a userspace-loader transfer, the mappings are
+         * inherited across fork; branch into them after the listener is owned
+         * by the parent. The installed USER_NOTIF filter remains active.
+         */
+        if (transfer)
+            kbox_loader_transfer_to_guest(transfer);
 
         /* 3f. Build argv and exec.
          *
@@ -622,11 +640,23 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
             } else
                 execv(command, (char *const *) argv);
 
-            /* exec only returns on failure. */
-            fprintf(stderr, "exec(%s): %s\n", command, strerror(errno));
-            free(argv);
-        }
-        _exit(127);
+            /* exec only returns on failure. Do not use libc cleanup here:
+             * the child is already under seccomp and these calls may block
+             * waiting for a notification that the parent cannot service.
+             */
+            {
+                int saved_errno = errno;
+                char message[192];
+                int length = snprintf(message, sizeof(message),
+                                      "kbox: exec(%s) failed: %s\n", command,
+                                      strerror(saved_errno));
+                if (length > 0)
+                    (void) syscall(__NR_write, STDERR_FILENO, message,
+                                   (size_t) length);
+                (void) syscall(__NR_exit_group, 127);
+                __builtin_unreachable();
+            }
+    }
     }
 
     /* Parent process. */

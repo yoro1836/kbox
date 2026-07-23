@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "kbox/fd-config.h"
+
 struct kbox_sysnrs; /* forward declaration */
 
 /* Virtual FD table.
@@ -15,16 +17,27 @@ struct kbox_sysnrs; /* forward declaration */
  * cache-friendly.
  */
 
-#define KBOX_FD_BASE 32768
-#define KBOX_FD_TABLE_MAX 4096
-#define KBOX_FD_FAST_BASE (KBOX_FD_BASE + (KBOX_FD_TABLE_MAX / 2))
-#define KBOX_FD_HOSTONLY_BASE (KBOX_FD_BASE + ((KBOX_FD_TABLE_MAX * 3) / 4))
+/* Compile-time maximums (struct layout uses these). */
+#define KBOX_FD_BASE_MAX 32768
+#define KBOX_FD_TABLE_MAX_MAX 4096
+#define KBOX_FD_TABLE_MIN 256
+
+/* Runtime values (set by kbox_fd_config_init, may be smaller than max). */
+#define KBOX_FD_BASE kbox_fd_base
+#define KBOX_FD_TABLE_MAX kbox_fd_table_max
+#define KBOX_FD_FAST_BASE kbox_fd_fast_base()
+#define KBOX_FD_HOSTONLY_BASE kbox_fd_hostonly_base()
+#define KBOX_FD_TABLE_CAPACITY kbox_fd_table_capacity()
+
+#define KBOX_FD_FAST_BASE_MAX (KBOX_FD_BASE_MAX + (KBOX_FD_TABLE_MAX_MAX / 2))
+#define KBOX_FD_HOSTONLY_BASE_MAX \
+    (KBOX_FD_BASE_MAX + ((KBOX_FD_TABLE_MAX_MAX * 3) / 4))
 /* redirect slots for FDs 0..1023 (dup2 targets) */
 #define KBOX_LOW_FD_MAX 1024
 /* tracked host-passthrough FDs in the gap [1024, 32768) */
-#define KBOX_MID_FD_MAX (KBOX_FD_BASE - KBOX_LOW_FD_MAX)
-#define KBOX_FD_TABLE_CAPACITY \
-    (KBOX_FD_TABLE_MAX + KBOX_LOW_FD_MAX + KBOX_MID_FD_MAX)
+#define KBOX_MID_FD_MAX (KBOX_FD_BASE_MAX - KBOX_LOW_FD_MAX)
+#define KBOX_FD_TABLE_CAPACITY_MAX \
+    (KBOX_FD_TABLE_MAX_MAX + KBOX_LOW_FD_MAX + KBOX_MID_FD_MAX)
 
 /* Reverse lookup for host_fd -> virtual fd. Sized to cover the
  * child's RLIMIT_NOFILE (65536). Host FDs at or above this bound
@@ -57,7 +70,7 @@ struct kbox_fd_entry {
 };
 
 struct kbox_fd_table {
-    struct kbox_fd_entry entries[KBOX_FD_TABLE_MAX];
+    struct kbox_fd_entry entries[KBOX_FD_TABLE_MAX_MAX];
     struct kbox_fd_entry low_fds[KBOX_LOW_FD_MAX]; /* dup2 redirect slots */
     struct kbox_fd_entry
         mid_fds[KBOX_MID_FD_MAX]; /* real host FDs 1024..32767 */

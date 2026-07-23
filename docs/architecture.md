@@ -63,11 +63,13 @@ directly in the BPF filter before reaching the supervisor.
 
 Maintains a mapping from guest FD numbers to LKL-internal FDs. Three
 ranges back the table: low FDs (0..1023) populated by dup2/dup3 and
-stdio-compatible redirection, mid FDs (1024..32767) for tracked
-host-passthrough descriptors, and high FDs (32768..36863) for normal
-LKL allocation, capped at `KBOX_FD_TABLE_MAX=4096` entries. This split
-avoids collisions between host-kernel FDs (pipes, inherited
-descriptors, eventfds) and LKL-managed FDs.
+stdio-compatible redirection, mid FDs (1024..base-1) for tracked
+host-passthrough descriptors, and a high range beginning at the runtime
+`KBOX_FD_BASE` for normal LKL allocation. Desktop Linux keeps the default
+high range (32768..36863); when `RLIMIT_NOFILE` is smaller, the base moves
+down so the high range remains below the limit, capped at
+`KBOX_FD_TABLE_MAX_MAX=4096` entries. This split avoids collisions between
+host-kernel FDs (pipes, inherited descriptors, eventfds) and LKL-managed FDs.
 
 ### Shadow FDs (`shadow-fd.c`, `dispatch-misc.c`)
 

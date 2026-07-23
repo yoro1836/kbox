@@ -125,7 +125,7 @@ static int is_shell_command(const char *command)
     return 0;
 }
 
-#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH
+#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH && !defined(__ANDROID__)
 /* Decide whether AUTO mode should prefer the userspace fast path (trap/rewrite)
  * over the seccomp supervisor path for a given binary.
  *
@@ -511,9 +511,19 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     /* Probe for available addresses instead of hardcoding.
      * Android's address space is more restricted than desktop Linux.
      */
+#ifdef __ANDROID__
+    /* Android arm64 commonly exposes a 39-bit userspace VA. The desktop
+     * 0x6000... hints are outside that range and all three probes fall back to
+     * the same address, making the main ELF and PT_INTERP mappings overlap.
+     */
+    uint64_t stack_addr = probe_map_addr(0x7000000000ULL, 4 * 1024 * 1024);
+    uint64_t main_addr = probe_map_addr(0x4000000000ULL, 4 * 1024 * 1024);
+    uint64_t interp_addr = probe_map_addr(0x5000000000ULL, 4 * 1024 * 1024);
+#else
     uint64_t stack_addr = probe_map_addr(0x700000010000ULL, 4 * 1024 * 1024);
     uint64_t main_addr = probe_map_addr(0x600000000000ULL, 4 * 1024 * 1024);
     uint64_t interp_addr = probe_map_addr(0x610000000000ULL, 4 * 1024 * 1024);
+#endif
 
     if (!stack_addr || !main_addr || !interp_addr) {
         fprintf(stderr,
@@ -532,11 +542,6 @@ static int prepare_userspace_launch(const struct kbox_image_args *args,
     spec.secure = 0;
 
     rc = kbox_loader_prepare_launch(&spec, launch);
-    if (rc < 0 && args->verbose)
-        fprintf(stderr,
-                "kbox: prepare_launch failed (exec_fd=%d, interp_fd=%d, "
-                "page_size=%lu)\n",
-                exec_memfd, interp_memfd, (unsigned long) spec.page_size);
     free(argv);
     return rc;
 }
@@ -593,10 +598,6 @@ static int set_launch_rlimits(void)
     if (getrlimit(RLIMIT_NOFILE, &current) != 0)
         return -1;
 
-    fprintf(stderr, "kbox: RLIMIT_NOFILE: cur=%lu hard=%lu required=%lu\n",
-            (unsigned long) current.rlim_cur, (unsigned long) current.rlim_max,
-            (unsigned long) required_nofile);
-
     /* Try to raise to required_nofile, but accept whatever the hard limit
      * allows. Android may have a lower hard limit than desktop Linux.
      */
@@ -606,7 +607,6 @@ static int set_launch_rlimits(void)
         nofile.rlim_max = current.rlim_max;
         setrlimit(RLIMIT_NOFILE, &nofile);
     }
-
     if (getrlimit(RLIMIT_NOFILE, &current) != 0)
         return -1;
     if (current.rlim_cur < required_nofile) {
@@ -617,6 +617,7 @@ static int set_launch_rlimits(void)
         errno = EMFILE;
         return -1;
     }
+
     if (setrlimit(RLIMIT_RTPRIO, &rtprio) != 0)
         return -1;
     return 0;
@@ -1116,7 +1117,7 @@ int kbox_run_image(const struct kbox_image_args *args)
             size_t exec_phase1_path_candidate_count = 0;
             unsigned char *elf_buf = NULL;
             size_t elf_buf_len = 0;
-#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH
+#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH && !defined(__ANDROID__)
             struct kbox_rewrite_report interp_report_outer;
             int interp_report_ok = 0;
 #endif
@@ -1280,7 +1281,7 @@ int kbox_run_image(const struct kbox_image_args *args)
                     if (rewrite_requested &&
                         kbox_rewrite_analyze_memfd(interp_memfd,
                                                    &interp_report) == 0) {
-#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH
+#if KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH && !defined(__ANDROID__)
                         interp_report_outer = interp_report;
                         interp_report_ok = 1;
 #endif
@@ -1394,6 +1395,13 @@ int kbox_run_image(const struct kbox_image_args *args)
             {
                 int use_trap = (args->syscall_mode == KBOX_SYSCALL_MODE_TRAP);
                 if (args->syscall_mode == KBOX_SYSCALL_MODE_AUTO) {
+#ifdef __ANDROID__
+                    /* Android seccomp execution materializes guest ELFs on a
+                     * regular executable inode; prefer the supervisor so
+                     * shell children share one LKL filesystem instance.
+                     */
+                    use_trap = 0;
+#else
                     if (!is_shell_command(command)) {
 #if !KBOX_AUTO_ENABLE_USERSPACE_FAST_PATH
                         use_trap = 0;
@@ -1428,6 +1436,7 @@ int kbox_run_image(const struct kbox_image_args *args)
                                     "seccomp for this executable\n");
                         }
                     }
+#endif
                 }
                 if (!use_trap)
                     goto skip_trap;
@@ -1596,11 +1605,34 @@ int kbox_run_image(const struct kbox_image_args *args)
         maybe_apply_virtual_procinfo_fast_path(interp_memfd, "PT_INTERP",
                                                args->verbose);
 
-        /* Fork, seccomp, exec, supervise. */
-        rc = kbox_run_supervisor(
-            sysnrs, command, args->extra_args, args->extra_argc, NULL,
-            exec_memfd, args->verbose, args->root_id || args->system_root,
-            args->normalize, web_ctx);
+        {
+            const struct kbox_loader_transfer_state *supervisor_transfer = NULL;
+
+#ifdef __ANDROID__
+            /* Android SELinux denies execveat() of the extracted guest memfd.
+             * Materialize the ELF in userspace before fork; the child inherits
+             * the mappings and transfers into them with USER_NOTIF active.
+             */
+            if (prepare_userspace_launch(args, command, exec_memfd,
+                                         interp_memfd, override_uid,
+                                         override_gid, &launch) < 0) {
+                fprintf(stderr,
+                        "kbox: seccomp userspace launch preparation failed\n");
+                if (interp_memfd >= 0)
+                    close(interp_memfd);
+                close(exec_memfd);
+                goto err_net;
+            }
+            supervisor_transfer = &launch.transfer;
+#endif
+
+            /* Fork, install seccomp, enter the guest, and supervise. */
+            rc = kbox_run_supervisor(
+                sysnrs, command, args->extra_args, args->extra_argc, NULL,
+                exec_memfd, supervisor_transfer, args->verbose,
+                args->root_id || args->system_root, args->normalize, web_ctx);
+            kbox_loader_launch_reset(&launch);
+        }
         if (interp_memfd >= 0)
             close(interp_memfd);
         close(exec_memfd);

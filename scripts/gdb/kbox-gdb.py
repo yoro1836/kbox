@@ -15,6 +15,17 @@ Commands:
 import gdb
 
 
+def _fd_config():
+    """Return the runtime FD base and table size."""
+    try:
+        return (
+            int(gdb.parse_and_eval("kbox_fd_base")),
+            int(gdb.parse_and_eval("kbox_fd_table_max")),
+        )
+    except gdb.error:
+        return 32768, 4096
+
+
 class KboxFdTable(gdb.Command):
     """Print the kbox virtual FD table.
 
@@ -50,15 +61,7 @@ class KboxFdTable(gdb.Command):
             print("Cannot access fd_table field.")
             return
 
-        try:
-            fd_base = int(gdb.parse_and_eval("KBOX_FD_BASE"))
-        except gdb.error:
-            fd_base = 32768
-
-        try:
-            max_fds = int(gdb.parse_and_eval("KBOX_FD_TABLE_MAX"))
-        except gdb.error:
-            max_fds = 4096
+        fd_base, max_fds = _fd_config()
 
         try:
             low_fd_max = int(gdb.parse_and_eval("KBOX_LOW_FD_MAX"))
@@ -431,15 +434,12 @@ class KboxSyscallTrace(gdb.Command):
         print(f"  args: [{', '.join(arg_strs)}]")
 
         # Check if the first arg looks like a virtual FD (>= FD_BASE).
-        try:
-            fd_base = int(gdb.parse_and_eval("KBOX_FD_BASE"))
-        except gdb.error:
-            fd_base = 32768
+        fd_base, max_fds = _fd_config()
 
         a0 = int(args[0]) & 0xFFFFFFFFFFFFFFFF
         # Signed interpretation for AT_FDCWD check.
         a0_signed = int(args[0])
-        if a0_signed != -100 and a0 >= fd_base and a0 < fd_base + 4096:
+        if a0_signed != -100 and a0 >= fd_base and a0 < fd_base + max_fds:
             try:
                 if ctx.type.code == gdb.TYPE_CODE_PTR:
                     ctx_deref = ctx.dereference()

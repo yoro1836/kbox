@@ -116,11 +116,11 @@ int kbox_loader_build_initial_stack(const struct kbox_loader_stack_spec *spec,
     unsigned char *buf = NULL;
     size_t buf_size;
     uint64_t *argv_addrs = NULL;
-    size_t argv_addrs_size;
+    size_t argv_addrs_size = 0;
     uint64_t *env_addrs = NULL;
-    size_t env_addrs_size;
+    size_t env_addrs_size = 0;
     struct kbox_loader_auxv_entry *auxv = NULL;
-    size_t auxv_size;
+    size_t auxv_size = 0;
     size_t auxi = 0;
 
     if (!spec || !image || !spec->main_plan || !spec->argv || spec->argc == 0)

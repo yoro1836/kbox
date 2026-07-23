@@ -24,6 +24,7 @@ struct kbox_dispatch {
 
 struct kbox_web_ctx;
 struct kbox_fd_inject_ops;
+struct kbox_loader_transfer_state;
 
 #define KBOX_PATH_SHADOW_CACHE_MAX 8
 #define KBOX_TRANSLATED_PATH_CACHE_MAX 8
@@ -190,6 +191,7 @@ int kbox_run_supervisor(const struct kbox_sysnrs *sysnrs,
                         int nargs,
                         const char *host_root,
                         int exec_memfd,
+                        const struct kbox_loader_transfer_state *transfer,
                         int verbose,
                         int root_identity,
                         int normalize,

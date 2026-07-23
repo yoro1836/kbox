@@ -55,6 +55,9 @@ endif
 $(TARGET): $(OBJS) $(LKL_LIB)
 	@echo "  LD      $@"
 	$(Q)$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
+ifdef IS_ANDROID
+	$(Q)python3 scripts/fix-android-elf.py $@
+endif
 
 # Rebuild all objects when .config changes (CFLAGS may differ).
 $(OBJS): $(wildcard .config)
